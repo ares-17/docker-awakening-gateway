@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"strings"
 	"time"
-
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/filters"
 	dockernetwork "github.com/docker/docker/api/types/network"

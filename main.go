@@ -6,7 +6,6 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
-
 	"docker-gateway/gateway"
 )
 
