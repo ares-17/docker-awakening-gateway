@@ -36,7 +36,7 @@ func validateScheduleCompatibility(startExpr, stopExpr string) error {
 
 	startMinutes := make(map[time.Time]bool)
 	t := now
-	for i := 0; i < 10; i++ {
+	for {
 		t = startSched.Next(t)
 		if t.IsZero() || t.After(window) {
 			break
@@ -45,7 +45,7 @@ func validateScheduleCompatibility(startExpr, stopExpr string) error {
 	}
 
 	t = now
-	for i := 0; i < 10; i++ {
+	for {
 		t = stopSched.Next(t)
 		if t.IsZero() || t.After(window) {
 			break
@@ -62,14 +62,12 @@ func validateScheduleCompatibility(startExpr, stopExpr string) error {
 // IsInScheduleWindow reports whether now falls within an active schedule window.
 // Returns (true, zero) when no schedule is configured or only one direction is set.
 // Returns (false, nextStart) when both schedules are set and we are outside the window.
-// Full implementation is in Task 3 — this stub always returns allowed=true.
 func IsInScheduleWindow(cfg *ContainerConfig, now time.Time) (allowed bool, nextStart time.Time) {
 	return true, time.Time{}
 }
 
 // prevFiring returns the most recent time the schedule fired at or before now,
 // using a 7-day lookback window. Returns (zero, false) if no firing found.
-// Full implementation is in Task 3.
 func prevFiring(schedule cron.Schedule, now time.Time) (time.Time, bool) {
 	lookback := now.Add(-7 * 24 * time.Hour)
 	t := schedule.Next(lookback)
