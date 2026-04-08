@@ -437,6 +437,31 @@
                 ? '<button onclick="wakeContainer(\'' + esc(c.name) + '\')" class="px-2.5 py-1 rounded text-[10px] font-bold font-mono uppercase tracking-wider dark:bg-primary/10 bg-primary/5 text-primary dark:border-primary/20 border-primary/20 border hover:bg-primary/20 transition-colors flex items-center gap-1"><svg class="w-3 h-3" fill="currentColor"><use href="#icon-play"/></svg>Wake</button>'
                 : '';
 
+            // Idle countdown bar — shown for running containers with idle_timeout_sec > 0
+            const idleBar = (c.status === 'running' && c.idle_timeout_sec > 0)
+                ? (function () {
+                    const remaining = c.idle_remaining_sec;
+                    if (remaining < 0) {
+                        return '<div class="mb-4 font-mono text-[10px] dark:text-slate-500 text-slate-400">⏱ idle stop: no activity yet</div>';
+                    }
+                    const total = c.idle_timeout_sec;
+                    const pct = Math.max(0, Math.min(100, Math.round((remaining / total) * 100)));
+                    const barColor = pct > 40 ? 'bg-status-running' : pct > 20 ? 'bg-status-starting' : 'bg-status-error';
+                    const mins = Math.floor(remaining / 60);
+                    const secs = remaining % 60;
+                    const label = mins > 0 ? mins + 'm ' + secs + 's' : secs + 's';
+                    return '<div class="mb-4">'
+                        + '<div class="flex justify-between font-mono text-[10px] dark:text-slate-500 text-slate-400 mb-1">'
+                        + '<span>⏱ idle stop in ' + label + '</span>'
+                        + '<span>' + pct + '%</span>'
+                        + '</div>'
+                        + '<div class="w-full h-1 dark:bg-border-dark bg-slate-200 rounded-full overflow-hidden">'
+                        + '<div class="h-full ' + barColor + ' rounded-full transition-all duration-1000" style="width:' + pct + '%"></div>'
+                        + '</div>'
+                        + '</div>';
+                })()
+                : '';
+
             // Status indicator
             const startingIcon = isStarting
                 ? '<svg class="w-3 h-3 animate-spin-slow" fill="currentColor"><use href="#icon-sync"/></svg>'
@@ -483,6 +508,7 @@
                 + '<p class="dark:text-white text-slate-700 font-mono font-medium text-sm">' + formatTimeout(c.idle_timeout) + '</p>'
                 + '</div>'
                 + '</div>'
+                + idleBar
                 // Footer
                 + '<div class="mt-auto border-t dark:border-border-dark border-border-light pt-3 flex justify-between items-center">'
                 + '<div class="flex items-center gap-4 text-xs dark:text-slate-500 text-slate-400 font-mono">'

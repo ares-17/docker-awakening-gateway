@@ -150,3 +150,61 @@ func TestStartState_ConcurrentAccess(t *testing.T) {
 	wg.Wait()
 	// No race detector panic = pass
 }
+
+// ─── calcIdleRemaining ────────────────────────────────────────────────────────
+
+func TestCalcIdleRemaining(t *testing.T) {
+	now := time.Date(2026, 4, 13, 10, 0, 0, 0, time.UTC)
+
+	tests := []struct {
+		name        string
+		idleTimeout time.Duration
+		lastSeen    time.Time
+		hasSeen     bool
+		want        int64
+	}{
+		{
+			name:        "no idle timeout returns 0",
+			idleTimeout: 0,
+			lastSeen:    now.Add(-5 * time.Minute),
+			hasSeen:     true,
+			want:        0,
+		},
+		{
+			name:        "never seen returns -1",
+			idleTimeout: 30 * time.Minute,
+			hasSeen:     false,
+			want:        -1,
+		},
+		{
+			name:        "recent activity returns positive remaining",
+			idleTimeout: 30 * time.Minute,
+			lastSeen:    now.Add(-5 * time.Minute),
+			hasSeen:     true,
+			want:        25 * 60, // 25 minutes in seconds
+		},
+		{
+			name:        "just expired clamps to zero",
+			idleTimeout: 30 * time.Minute,
+			lastSeen:    now.Add(-35 * time.Minute),
+			hasSeen:     true,
+			want:        0,
+		},
+		{
+			name:        "exactly at boundary",
+			idleTimeout: 10 * time.Minute,
+			lastSeen:    now.Add(-10 * time.Minute),
+			hasSeen:     true,
+			want:        0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := calcIdleRemaining(tt.idleTimeout, tt.lastSeen, tt.hasSeen, now)
+			if got != tt.want {
+				t.Errorf("calcIdleRemaining() = %d, want %d", got, tt.want)
+			}
+		})
+	}
+}

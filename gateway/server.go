@@ -616,6 +616,24 @@ func (rl *rateLimiter) evictStale() {
 	}
 }
 
+// calcIdleRemaining returns seconds until idle-triggered stop.
+//   - Returns 0 if idleTimeout is disabled (zero).
+//   - Returns -1 if the container has never served a request (hasSeen=false).
+//   - Returns remaining seconds clamped to [0, ∞) otherwise.
+func calcIdleRemaining(idleTimeout time.Duration, lastSeen time.Time, hasSeen bool, now time.Time) int64 {
+	if idleTimeout == 0 {
+		return 0
+	}
+	if !hasSeen {
+		return -1
+	}
+	remaining := int64(idleTimeout.Seconds()) - int64(now.Sub(lastSeen).Seconds())
+	if remaining < 0 {
+		remaining = 0
+	}
+	return remaining
+}
+
 // ─── Template data structs ────────────────────────────────────────────────────
 
 type loadingData struct {
@@ -652,9 +670,11 @@ type statusContainerJSON struct {
 	TargetPort   string  `json:"target_port"`
 	StartTimeout string  `json:"start_timeout"`
 	IdleTimeout  string  `json:"idle_timeout"`
-	StartedAt    *string `json:"started_at,omitempty"`
-	LastRequest  *string `json:"last_request,omitempty"`
-	Network      string  `json:"network"`
+	StartedAt        *string `json:"started_at,omitempty"`
+	LastRequest      *string `json:"last_request,omitempty"`
+	IdleTimeoutSec   int64   `json:"idle_timeout_sec"`
+	IdleRemainingSec int64   `json:"idle_remaining_sec"`
+	Network          string  `json:"network"`
 }
 
 type statusAPIResponse struct {
@@ -774,6 +794,12 @@ func (s *Server) handleStatusAPI(w http.ResponseWriter, r *http.Request) {
 			ts := t.UTC().Format(time.RFC3339)
 			entry.LastRequest = &ts
 		}
+
+		// Idle timeout countdown fields.
+		now := time.Now()
+		lastSeen, hasSeen := s.manager.GetLastSeen(c.Name)
+		entry.IdleTimeoutSec = int64(c.IdleTimeout.Seconds())
+		entry.IdleRemainingSec = calcIdleRemaining(c.IdleTimeout, lastSeen, hasSeen, now)
 
 		result.Containers = append(result.Containers, entry)
 	}
