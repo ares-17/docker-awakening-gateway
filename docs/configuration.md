@@ -40,6 +40,8 @@ Attach Docker labels directly to your containers. The gateway polls the Docker d
 | `dag.icon` | `docker` | [Simple Icons](https://simpleicons.org/) slug for the `/_status` dashboard |
 | `dag.health_path` | `""` | HTTP path (e.g. `/healthz`) for readiness probe instead of TCP |
 | `dag.depends_on` | `""` | Comma-separated container names to start first (e.g. `postgres,redis`) |
+| `dag.schedule_start` | `""` | Cron expression to start the container proactively (e.g. `0 8 * * 1-5`) |
+| `dag.schedule_stop` | `""` | Cron expression to stop the container proactively (e.g. `0 20 * * 1-5`) |
 
 ### Example
 
@@ -135,7 +137,12 @@ containers:
     icon: "postgresql"           # (Default: docker)
     health_path: "/healthz"      # (Default: "" — TCP probe)
     depends_on: ["postgres"]     # (Default: [])
+    schedule_start: "0 8 * * 1-5"  # (Default: "" — disabled) cron to start proactively
+    schedule_stop:  "0 20 * * 1-5" # (Default: "" — disabled) cron to stop proactively
 ```
+
+> [!NOTE]
+> When both `schedule_start` and `schedule_stop` are set, requests outside the active window are blocked with an HTTP 503 offline page. See **[Scheduling →](scheduling.md)** for full details and examples.
 
 ---
 

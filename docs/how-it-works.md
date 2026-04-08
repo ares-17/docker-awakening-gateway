@@ -31,6 +31,9 @@ Every incoming HTTP request follows this decision path:
        │
        └─ Match is a CONTAINER
               │
+              ├─ schedule gate: IsInScheduleWindow?
+              │       └─ outside window → HTTP 503 Offline Page (static, no polling)
+              │
               ├─ container running?
               │       │
               │       ├─ YES: dependencies all running?
@@ -62,6 +65,7 @@ docker-gateway/
     ├── docker.go              # Docker client: inspect, start, stop, logs, IP resolution
     ├── manager.go             # Concurrency-safe start states, idle auto-stop watcher
     ├── server.go              # HTTP server, routing, proxy headers, WebSocket tunnelling
+    ├── scheduler.go           # ScheduleManager (cron jobs), IsInScheduleWindow
     ├── discovery.go           # Label-based container auto-discovery, config merging
     ├── group.go               # Round-robin GroupRouter
     ├── metrics.go             # Prometheus counter/histogram registration and recording
@@ -69,7 +73,8 @@ docker-gateway/
     └── templates/
         ├── loading.html       # Awakening page: log box + barber-pole progress + JS polling
         ├── error.html         # Failure state page
-        └── status.html        # Admin status dashboard (dark/light mode)
+        ├── scheduled.html     # Offline page: HTTP 503, next scheduled start time
+        └── status.html        # Admin status dashboard (dark/light, idle countdown)
 ```
 
 ### `manager.go` — Concurrency-safe State Machine
@@ -118,3 +123,21 @@ idle_timeout   — checked every 60 seconds (background goroutine)
 ```
 
 Both timeouts are configured **per container**. Setting `idle_timeout: 0` (the default) disables auto-stop.
+
+---
+
+## Cron Scheduling
+
+The `ScheduleManager` runs a background cron loop (powered by `robfig/cron/v3`) that fires per-container start/stop jobs at the configured times. It is synchronised with config hot-reloads: on every `SIGHUP`, all existing entries are removed and re-registered from the updated config atomically.
+
+```
+schedule_start  — cron fires → manager.EnsureRunning(ctx, cfg)
+schedule_stop   — cron fires → client.StopContainer(ctx, name)
+
+handleRequest   — IsInScheduleWindow(cfg, now)
+    │
+    ├─ prevStart > prevStop  →  inside window  →  proxy normally
+    └─ prevStop  ≥ prevStart →  outside window →  HTTP 503 scheduled.html
+```
+
+See **[Scheduling →](scheduling.md)** for cron syntax, examples, and the offline page.

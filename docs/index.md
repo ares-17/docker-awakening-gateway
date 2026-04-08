@@ -37,6 +37,8 @@ In home labs, edge devices, and resource-constrained environments, keeping every
 | **On-demand startup** | Container sleeps until a request arrives — then wakes automatically |
 | **Live loading page** | Animated UI with real-time container logs while the container boots |
 | **Idle auto-stop** | Configurable `idle_timeout` per container; background watcher stops idle containers |
+| **Cron scheduling** | Per-container `schedule_start` / `schedule_stop` cron expressions; requests outside the active window get a styled offline page |
+| **Idle countdown** | `/_status` dashboard shows a live colour-coded countdown bar to the next idle stop |
 | **Transparent proxy** | Zero overhead once the container is running — full HTTP + WebSocket support |
 | **Label discovery** | Add `dag.enabled=true` to any container; no static config needed |
 | **Dependency ordering** | `depends_on` with topological sort — start `postgres` before `app` automatically |
@@ -72,6 +74,7 @@ In home labs, edge devices, and resource-constrained environments, keeping every
 - **[Getting Started](getting-started.md)** — install, quick start, test scenarios
 - **[How It Works](how-it-works.md)** — request lifecycle, component architecture
 - **[Configuration](configuration.md)** — all options for `config.yaml` and Docker labels
+- **[Scheduling](scheduling.md)** — cron-based start/stop, offline page, idle countdown in dashboard
 - **[Security](security.md)** — admin auth, trusted proxies, Docker socket, distroless
 - **[Hot-Reload](hot-reload.md)** — live config updates without restarts
 - **[Groups & Dependencies](groups-and-dependencies.md)** — load balancing, dependency ordering

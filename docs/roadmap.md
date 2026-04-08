@@ -69,10 +69,18 @@ nav_order: 12
 - [x] **Container grouping / round-robin routing** — start a group of containers, load-balance across replicas
 - [x] **Dependency-ordered startup** — `depends_on` triggers topological sort before proxying
 
+### Scheduling
+- [x] **Cron-based start scheduling** — `schedule_start` cron expression triggers proactive container start
+- [x] **Cron-based stop scheduling** — `schedule_stop` cron expression triggers proactive container stop
+- [x] **Access window enforcement** — when both are set, requests outside the window get HTTP 503 with an offline page showing next scheduled start
+- [x] **Cron via Docker labels** — `dag.schedule_start` and `dag.schedule_stop` for label-discovered containers
+- [x] **Hot-reload for schedules** — cron jobs re-registered atomically on `SIGHUP`
+- [x] **Idle countdown in `/_status`** — live colour-coded countdown bar (green → amber → red) for running containers with `idle_timeout`
+
 ### Quality
 - [x] **Structured logging** — Go 1.21+ `log/slog` JSON-structured output
 - [x] **Discovery change detection** — only reload when merged config actually differs
-- [x] **Unit tests** — table-driven tests for config, discovery, rate limiter, proxy routing, security
+- [x] **Unit tests** — table-driven tests for config, discovery, rate limiter, proxy routing, security, scheduling
 
 ---
 
