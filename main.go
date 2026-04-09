@@ -9,9 +9,12 @@ import (
 	"docker-gateway/gateway"
 )
 
+var version = "dev"
+
 func main() {
 	// Configure structured JSON logging as the global default.
 	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, nil)))
+	slog.Info("starting docker-gateway", "version", version)
 
 	// Root context — cancelled on SIGTERM / SIGINT for graceful shutdown.
 	ctx, cancel := context.WithCancel(context.Background())

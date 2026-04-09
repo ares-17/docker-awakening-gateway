@@ -10,7 +10,11 @@ RUN apk add --no-cache ca-certificates
 COPY . .
 
 # Build the static binary using vendored dependencies
-RUN CGO_ENABLED=0 GOOS=linux go build -mod=vendor -a -installsuffix cgo -o docker-gateway .
+ARG VERSION=dev
+RUN CGO_ENABLED=0 GOOS=linux go build \
+    -mod=vendor \
+    -ldflags="-s -w -X main.version=${VERSION}" \
+    -o docker-gateway .
 
 # Stage 2: Final lightweight image
 FROM gcr.io/distroless/static-debian12
