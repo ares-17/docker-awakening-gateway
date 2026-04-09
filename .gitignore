@@ -33,3 +33,9 @@ GEMINI.md
 # Marketing/content drafts
 docs/linkedin-post.md
 docs/medium-post.md
+
+# AI planning docs (internal)
+docs/superpowers/
+
+# Generated test artifacts
+coverage.out

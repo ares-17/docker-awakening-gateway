@@ -1,8 +1,19 @@
 # Docker Awakening Gateway
 
 <p align="center">
-  <img src="https://img.shields.io/badge/go-%2300ADD8.svg?style=for-the-badge&logo=go&logoColor=white" alt="Go">
-  <img src="https://img.shields.io/badge/docker-%230db7ed.svg?style=for-the-badge&logo=docker&logoColor=white" alt="Docker">
+  <a href="https://github.com/ares-17/docker-gateway/actions/workflows/ci.yml">
+    <img src="https://github.com/ares-17/docker-gateway/actions/workflows/ci.yml/badge.svg" alt="CI">
+  </a>
+  <a href="https://github.com/ares-17/docker-gateway/releases">
+    <img src="https://img.shields.io/github/v/release/ares-17/docker-gateway?color=2a788e" alt="Latest Release">
+  </a>
+  <a href="https://github.com/ares-17/docker-gateway/pkgs/container/docker-gateway">
+    <img src="https://img.shields.io/badge/ghcr.io-docker--gateway-2a788e?logo=docker&logoColor=white" alt="Docker Image">
+  </a>
+  <a href="https://github.com/ares-17/docker-gateway/blob/main/LICENSE">
+    <img src="https://img.shields.io/badge/license-MIT-green" alt="MIT License">
+  </a>
+  <img src="https://img.shields.io/badge/go-1.24-00ADD8?logo=go&logoColor=white" alt="Go Version">
 </p>
 
 An ultra-lightweight reverse proxy that **wakes up stopped Docker containers on demand**. When a request arrives for a sleeping container, the gateway shows an animated loading page with live logs, starts the container, and transparently proxies once it's ready.
