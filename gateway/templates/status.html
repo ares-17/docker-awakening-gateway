@@ -10,6 +10,7 @@
     <link
         href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap"
         rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@400,0&display=swap" rel="stylesheet" />
     <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
     <script>
         tailwind.config = {
@@ -446,7 +447,7 @@
                         : 'No upcoming start scheduled.';
                     scheduleBlock = '<div class="mb-5 bg-red-950/20 rounded border border-red-900/40 p-3">'
                         + '<div class="flex items-center gap-2 mb-2 text-status-error">'
-                        + '<span class="material-symbols-outlined text-sm">event_busy</span>'
+                        + '<span class="material-symbols-outlined" style="font-size:16px">event_busy</span>'
                         + '<h4 class="text-[10px] font-bold uppercase tracking-widest">Scheduled Downtime</h4>'
                         + '</div>'
                         + '<div class="flex flex-col gap-1">'
@@ -459,9 +460,9 @@
                     const nextInfo = c.next_scheduled_start
                         ? 'Next stop: ' + esc(c.next_scheduled_start)
                         : '';
-                    scheduleBlock = '<div class="mb-5 dark:bg-background-dark/30 bg-slate-50 rounded-lg p-3 dark:border-border-dark/60 border-border-light/60 border">'
+                    scheduleBlock = '<div class="mb-5 dark:bg-bg-dark/40 bg-slate-50 rounded-lg p-3 dark:border-border-dark/60 border-border-light/60 border">'
                         + '<div class="flex items-center gap-2 mb-2">'
-                        + '<span class="material-symbols-outlined text-sm dark:text-slate-500 text-slate-400">schedule</span>'
+                        + '<span class="material-symbols-outlined dark:text-slate-500 text-slate-400" style="font-size:16px">schedule</span>'
                         + '<h4 class="text-[10px] font-bold dark:text-slate-400 text-slate-500 uppercase tracking-widest">Scheduled Activities' + tzLabel + '</h4>'
                         + '</div>'
                         + '<div class="flex flex-col gap-1.5">'
