@@ -6,13 +6,14 @@ WORKDIR /app
 # Install certificates
 RUN apk add --no-cache ca-certificates
 
-# Copy source code (including vendor/)
-COPY . .
+# Download dependencies (cached layer — only invalidated when go.sum changes)
+COPY go.mod go.sum ./
+RUN go mod download
 
-# Build the static binary using vendored dependencies
+# Copy source and build
+COPY . .
 ARG VERSION=dev
 RUN CGO_ENABLED=0 GOOS=linux go build \
-    -mod=vendor \
     -ldflags="-s -w -X main.version=${VERSION}" \
     -o docker-gateway .
 

@@ -1,5 +1,3 @@
-version: "2"
-
 linters:
   enable:
     - govet        # go vet checks (shadow, printf format, etc.)

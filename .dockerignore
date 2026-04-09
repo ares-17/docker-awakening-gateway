@@ -1,3 +1,6 @@
+# Vendored deps — not used in Docker build (go mod download is used instead)
+vendor/
+
 # Test files — never needed in the production image
 *_test.go
 
