@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-04-09
+
+### Added
+
+- **Cron schedule display on status dashboard** — container cards now show
+  a "Scheduled Activities" block (start/stop cron expressions, timezone,
+  next event) or a "Scheduled Downtime" block (red) when outside the
+  configured schedule window
+- Schedule fields exposed in `/_status/api` JSON response:
+  `schedule_start`, `schedule_stop`, `schedule_timezone`,
+  `scheduled_downtime`, `next_scheduled_start`
+
+### Fixed
+
+- Material Symbols font now loaded in `status.html` so schedule icons
+  render correctly instead of showing as raw text
+- Schedule block background colour resolves correctly in dark mode
+  (`bg-bg-dark` instead of the undefined `bg-background-dark`)
+
+### Changed
+
+- Light mode card definition improved: visible box-shadow, `border-slate-200`,
+  stronger text contrast (`slate-500` labels), icon box uses `bg-blue-50`
+- Schedule block text sizes increased for readability
+
 ## [1.0.0] - 2026-04-09
 
 ### Added
@@ -41,5 +66,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Multi-stage Docker build** — Go 1.24 Alpine builder, distroless final image (~22 MB)
 - Unit tests for config loading, scheduler, admin auth, discovery, manager, and server
 
-[Unreleased]: https://github.com/ares-17/docker-gateway/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/ares-17/docker-gateway/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/ares-17/docker-gateway/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/ares-17/docker-gateway/releases/tag/v1.0.0
