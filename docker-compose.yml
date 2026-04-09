@@ -45,3 +45,21 @@ services:
     image: alpine
     container_name: fail-app
     entrypoint: ["/bin/sh", "-c", "echo 'fail-app: simulating crash'; exit 1"]
+
+  # ============================================================
+  # TEST — sched-offline
+  # Mostra subito la pagina "Scheduled Downtime".
+  # schedule_stop=10:00 (passato), schedule_start=11:00 (futuro).
+  # ============================================================
+  sched-offline:
+    image: nginx:alpine
+    container_name: sched-offline
+
+  # ============================================================
+  # TEST — sched-live
+  # Cron reale: start alle 10:16, stop alle 10:17.
+  # Guarda: docker compose logs -f gateway
+  # ============================================================
+  sched-live:
+    image: nginx:alpine
+    container_name: sched-live
