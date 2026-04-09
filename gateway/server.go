@@ -38,6 +38,7 @@ type Server struct {
 	rateLimiter  *rateLimiter
 	groupRouter  *GroupRouter
 	scheduler    *ScheduleManager
+	scheduleTZ   string
 	httpServer   *http.Server
 }
 
@@ -50,6 +51,7 @@ func NewServer(manager *ContainerManager, scheduler *ScheduleManager, cfg *Gatew
 	return &Server{
 		manager:      manager,
 		scheduler:    scheduler,
+		scheduleTZ:   cfg.Gateway.ScheduleTimezone,
 		cfg:          cfg,
 		hostIndex:    BuildHostIndex(cfg),
 		groupIndex:   BuildGroupHostIndex(cfg),
@@ -128,11 +130,12 @@ func (s *Server) ReloadConfig(newCfg *GatewayConfig) {
 	s.configMu.Lock()
 	defer s.configMu.Unlock()
 	s.cfg = newCfg
+	s.scheduleTZ = newCfg.Gateway.ScheduleTimezone
 	s.hostIndex = BuildHostIndex(newCfg)
 	s.groupIndex = BuildGroupHostIndex(newCfg)
 	s.containerMap = BuildContainerMap(newCfg)
 	s.trustedCIDRs = parseTrustedProxies(newCfg.Gateway.TrustedProxies)
-	s.scheduler.Sync(newCfg.Containers, "")
+	s.scheduler.Sync(newCfg.Containers, newCfg.Gateway.ScheduleTimezone)
 }
 
 // GetConfig safely retrieves the current configuration.
@@ -220,7 +223,10 @@ func (s *Server) handleRequest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Schedule gate: block access outside the configured cron window.
-	if allowed, nextStart := IsInScheduleWindow(cfg, time.Now(), ""); !allowed {
+	s.configMu.RLock()
+	tz := s.scheduleTZ
+	s.configMu.RUnlock()
+	if allowed, nextStart := IsInScheduleWindow(cfg, time.Now(), tz); !allowed {
 		s.serveScheduledPage(w, r, cfg, nextStart)
 		return
 	}

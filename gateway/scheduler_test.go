@@ -237,3 +237,25 @@ func TestScheduleManagerSync(t *testing.T) {
 		}
 	})
 }
+
+func TestScheduleManagerSyncWithTimezone(t *testing.T) {
+	sm := NewScheduleManager(nil, nil)
+
+	containers := []ContainerConfig{
+		{Name: "app", ScheduleStart: "0 8 * * *", ScheduleStop: "0 20 * * *", StartTimeout: 60 * time.Second},
+	}
+	sm.Sync(containers, "Europe/Rome")
+
+	entries := sm.cron.Entries()
+	if len(entries) != 2 {
+		t.Fatalf("expected 2 cron entries, got %d", len(entries))
+	}
+	// Verify the start entry fires at 08:00 Rome time by checking Next()
+	rome, _ := time.LoadLocation("Europe/Rome")
+	ref := time.Date(2026, 4, 9, 7, 59, 0, 0, rome) // just before 08:00 Rome
+	next := entries[0].Schedule.Next(ref)
+	want := time.Date(2026, 4, 9, 8, 0, 0, 0, rome)
+	if !next.Equal(want) {
+		t.Errorf("next firing = %v, want %v", next, want)
+	}
+}
