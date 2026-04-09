@@ -713,6 +713,12 @@ type statusContainerJSON struct {
 	IdleTimeoutSec   int64   `json:"idle_timeout_sec"`
 	IdleRemainingSec int64   `json:"idle_remaining_sec"`
 	Network          string  `json:"network"`
+	// Schedule
+	ScheduleStart      string `json:"schedule_start"`
+	ScheduleStop       string `json:"schedule_stop"`
+	ScheduleTimezone   string `json:"schedule_timezone"`
+	ScheduledDowntime  bool   `json:"scheduled_downtime"`
+	NextScheduledStart string `json:"next_scheduled_start"`
 }
 
 type statusAPIResponse struct {
@@ -838,6 +844,26 @@ func (s *Server) handleStatusAPI(w http.ResponseWriter, r *http.Request) {
 		lastSeen, hasSeen := s.manager.GetLastSeen(c.Name)
 		entry.IdleTimeoutSec = int64(c.IdleTimeout.Seconds())
 		entry.IdleRemainingSec = calcIdleRemaining(c.IdleTimeout, lastSeen, hasSeen, now)
+
+		// Schedule fields.
+		entry.ScheduleStart = c.ScheduleStart
+		entry.ScheduleStop = c.ScheduleStop
+		entry.ScheduleTimezone = c.ScheduleTimezone
+		if c.ScheduleStart != "" && c.ScheduleStop != "" {
+			s.configMu.RLock()
+			effectiveLoc := s.schedLoc
+			s.configMu.RUnlock()
+			if c.ScheduleTimezone != "" {
+				if perLoc, err := resolveLocation(c.ScheduleTimezone); err == nil {
+					effectiveLoc = perLoc
+				}
+			}
+			allowed, nextStart := IsInScheduleWindow(c, now, effectiveLoc)
+			entry.ScheduledDowntime = !allowed
+			if !nextStart.IsZero() {
+				entry.NextScheduledStart = nextStart.In(effectiveLoc).Format("Mon 02 Jan · 15:04")
+			}
+		}
 
 		result.Containers = append(result.Containers, entry)
 	}
