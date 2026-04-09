@@ -116,6 +116,10 @@ type ContainerConfig struct {
 	// ScheduleStop is an optional standard 5-field cron expression (e.g. "0 20 * * 1-5")
 	// that triggers a proactive container stop.
 	ScheduleStop string `yaml:"schedule_stop"`
+	// ScheduleTimezone is an optional IANA timezone name for this container's
+	// schedule_start / schedule_stop expressions. When set, overrides the global
+	// gateway.schedule_timezone. (default: "" uses gateway.schedule_timezone)
+	ScheduleTimezone string `yaml:"schedule_timezone"`
 }
 
 // LoadConfig reads and parses the YAML config file.
@@ -172,13 +176,18 @@ func LoadConfig() (*GatewayConfig, error) {
 	return &cfg, nil
 }
 
-// resolveLocation parses an IANA timezone name and returns the corresponding
+// ResolveLocation parses an IANA timezone name and returns the corresponding
 // *time.Location. Returns time.Local when name is empty.
-func resolveLocation(name string) (*time.Location, error) {
+func ResolveLocation(name string) (*time.Location, error) {
 	if name == "" {
 		return time.Local, nil
 	}
 	return time.LoadLocation(name)
+}
+
+// resolveLocation is an unexported alias kept for internal use.
+func resolveLocation(name string) (*time.Location, error) {
+	return ResolveLocation(name)
 }
 
 // Validate checks if the loaded configuration is valid.
@@ -269,9 +278,21 @@ func (c *GatewayConfig) Validate() error {
 			}
 		}
 
+		// Validate per-container schedule_timezone if set.
+		if ctr.ScheduleTimezone != "" {
+			if _, err := resolveLocation(ctr.ScheduleTimezone); err != nil {
+				return fmt.Errorf("container %q: schedule_timezone: invalid IANA timezone %q: %w", ctr.Name, ctr.ScheduleTimezone, err)
+			}
+		}
 		// Validate schedule expressions if present.
 		if ctr.ScheduleStart != "" || ctr.ScheduleStop != "" {
-			if err := validateScheduleCompatibility(ctr.ScheduleStart, ctr.ScheduleStop, c.Gateway.ScheduleTimezone); err != nil {
+			// Use per-container TZ if set, else global.
+			effectiveTZ := ctr.ScheduleTimezone
+			if effectiveTZ == "" {
+				effectiveTZ = c.Gateway.ScheduleTimezone
+			}
+			loc, _ := resolveLocation(effectiveTZ)
+			if err := validateScheduleCompatibility(ctr.ScheduleStart, ctr.ScheduleStop, loc); err != nil {
 				return fmt.Errorf("container %q: %w", ctr.Name, err)
 			}
 		}

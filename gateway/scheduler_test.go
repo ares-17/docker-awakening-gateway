@@ -26,6 +26,31 @@ func TestCronExpr(t *testing.T) {
 	}
 }
 
+// ─── cronExprFromLoc ─────────────────────────────────────────────────────────
+
+func TestCronExprFromLoc(t *testing.T) {
+	rome, err := time.LoadLocation("Europe/Rome")
+	if err != nil {
+		t.Fatal(err)
+	}
+	tests := []struct {
+		expr string
+		loc  *time.Location
+		want string
+	}{
+		{"0 8 * * *", nil, "0 8 * * *"},
+		{"0 8 * * *", time.Local, "0 8 * * *"},
+		{"0 8 * * *", rome, "CRON_TZ=Europe/Rome 0 8 * * *"},
+		{"", rome, ""},
+	}
+	for _, tt := range tests {
+		got := cronExprFromLoc(tt.expr, tt.loc)
+		if got != tt.want {
+			t.Errorf("cronExprFromLoc(%q, %v) = %q, want %q", tt.expr, tt.loc, got, tt.want)
+		}
+	}
+}
+
 // ─── validateScheduleCompatibility ───────────────────────────────────────────
 
 func TestScheduleCompatibility(t *testing.T) {
@@ -49,7 +74,7 @@ func TestScheduleCompatibility(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := validateScheduleCompatibility(tt.start, tt.stop, "")
+			err := validateScheduleCompatibility(tt.start, tt.stop, time.Local)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("validateScheduleCompatibility(%q, %q) error = %v, wantErr %v",
 					tt.start, tt.stop, err, tt.wantErr)
@@ -129,7 +154,7 @@ func TestIsInScheduleWindow(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			allowed, nextStart := IsInScheduleWindow(&tt.cfg, tt.now, "")
+			allowed, nextStart := IsInScheduleWindow(&tt.cfg, tt.now, time.Local)
 			if allowed != tt.wantAllowed {
 				t.Errorf("IsInScheduleWindow() allowed = %v, want %v", allowed, tt.wantAllowed)
 			}
@@ -159,7 +184,7 @@ func TestIsInScheduleWindowWithTimezone(t *testing.T) {
 	}
 
 	t.Run("outside window with Rome timezone", func(t *testing.T) {
-		allowed, nextStart := IsInScheduleWindow(&cfg, now, "Europe/Rome")
+		allowed, nextStart := IsInScheduleWindow(&cfg, now, rome)
 		if allowed {
 			t.Error("expected blocked outside window, got allowed")
 		}
@@ -170,7 +195,7 @@ func TestIsInScheduleWindowWithTimezone(t *testing.T) {
 
 	t.Run("inside window with Rome timezone (12:00 Rome)", func(t *testing.T) {
 		noon := time.Date(2026, 4, 9, 12, 0, 0, 0, rome)
-		allowed, _ := IsInScheduleWindow(&cfg, noon, "Europe/Rome")
+		allowed, _ := IsInScheduleWindow(&cfg, noon, rome)
 		if !allowed {
 			t.Error("expected allowed inside window at noon Rome time")
 		}
@@ -189,7 +214,7 @@ func TestScheduleManagerSync(t *testing.T) {
 			{Name: "db", ScheduleStart: "0 7 * * *", StartTimeout: 30 * time.Second},
 			{Name: "cache"}, // no schedule
 		}
-		sm.Sync(containers, "")
+		sm.Sync(containers, time.Local)
 
 		// app has start+stop = 2 entries; db has start only = 1; cache = 0
 		if got := len(sm.cron.Entries()); got != 3 {
@@ -216,7 +241,7 @@ func TestScheduleManagerSync(t *testing.T) {
 		updated := []ContainerConfig{
 			{Name: "app", ScheduleStart: "0 9 * * *", ScheduleStop: "0 21 * * *", StartTimeout: 60 * time.Second},
 		}
-		sm.Sync(updated, "")
+		sm.Sync(updated, time.Local)
 
 		if got := len(sm.cron.Entries()); got != 2 {
 			t.Errorf("after re-sync expected 2 cron entries, got %d", got)
@@ -227,7 +252,7 @@ func TestScheduleManagerSync(t *testing.T) {
 	})
 
 	t.Run("sync with nil removes all entries", func(t *testing.T) {
-		sm.Sync(nil, "")
+		sm.Sync(nil, time.Local)
 
 		if got := len(sm.cron.Entries()); got != 0 {
 			t.Errorf("after empty sync expected 0 cron entries, got %d", got)
@@ -241,17 +266,20 @@ func TestScheduleManagerSync(t *testing.T) {
 func TestScheduleManagerSyncWithTimezone(t *testing.T) {
 	sm := NewScheduleManager(nil, nil)
 
+	rome, err := time.LoadLocation("Europe/Rome")
+	if err != nil {
+		t.Fatal(err)
+	}
 	containers := []ContainerConfig{
 		{Name: "app", ScheduleStart: "0 8 * * *", ScheduleStop: "0 20 * * *", StartTimeout: 60 * time.Second},
 	}
-	sm.Sync(containers, "Europe/Rome")
+	sm.Sync(containers, rome)
 
 	entries := sm.cron.Entries()
 	if len(entries) != 2 {
 		t.Fatalf("expected 2 cron entries, got %d", len(entries))
 	}
 	// Verify the start entry fires at 08:00 Rome time by checking Next()
-	rome, _ := time.LoadLocation("Europe/Rome")
 	ref := time.Date(2026, 4, 9, 7, 59, 0, 0, rome) // just before 08:00 Rome
 	next := entries[0].Schedule.Next(ref)
 	want := time.Date(2026, 4, 9, 8, 0, 0, 0, rome)

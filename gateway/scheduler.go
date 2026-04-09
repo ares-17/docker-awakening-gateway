@@ -20,20 +20,30 @@ func cronExpr(expr, tzName string) string {
 	return "CRON_TZ=" + tzName + " " + expr
 }
 
+// cronExprFromLoc prepends CRON_TZ=<tz> to expr using the location's name.
+// Returns expr unchanged when loc is nil, time.Local, or expr is empty.
+// time.Local is skipped because "Local" is not a valid IANA name for CRON_TZ.
+func cronExprFromLoc(expr string, loc *time.Location) string {
+	if expr == "" || loc == nil || loc == time.Local {
+		return expr
+	}
+	return "CRON_TZ=" + loc.String() + " " + expr
+}
+
 // validateScheduleCompatibility returns an error if the two cron expressions
 // are malformed or would fire at the same minute within the next 7 days.
-func validateScheduleCompatibility(startExpr, stopExpr, tzName string) error {
+func validateScheduleCompatibility(startExpr, stopExpr string, loc *time.Location) error {
 	var startSched, stopSched cron.Schedule
 	var err error
 
 	if startExpr != "" {
-		startSched, err = cron.ParseStandard(cronExpr(startExpr, tzName))
+		startSched, err = cron.ParseStandard(cronExprFromLoc(startExpr, loc))
 		if err != nil {
 			return fmt.Errorf("schedule_start: invalid cron expression %q: %w", startExpr, err)
 		}
 	}
 	if stopExpr != "" {
-		stopSched, err = cron.ParseStandard(cronExpr(stopExpr, tzName))
+		stopSched, err = cron.ParseStandard(cronExprFromLoc(stopExpr, loc))
 		if err != nil {
 			return fmt.Errorf("schedule_stop: invalid cron expression %q: %w", stopExpr, err)
 		}
@@ -75,13 +85,13 @@ func validateScheduleCompatibility(startExpr, stopExpr, tzName string) error {
 // IsInScheduleWindow reports whether now falls within an active schedule window.
 // Returns (true, zero) when no schedule is configured or only one direction is set.
 // Returns (false, nextStart) when both schedules are set and we are outside the window.
-func IsInScheduleWindow(cfg *ContainerConfig, now time.Time, tzName string) (allowed bool, nextStart time.Time) {
+func IsInScheduleWindow(cfg *ContainerConfig, now time.Time, loc *time.Location) (allowed bool, nextStart time.Time) {
 	if cfg.ScheduleStart == "" || cfg.ScheduleStop == "" {
 		return true, time.Time{}
 	}
 
-	startSched, err1 := cron.ParseStandard(cronExpr(cfg.ScheduleStart, tzName))
-	stopSched, err2 := cron.ParseStandard(cronExpr(cfg.ScheduleStop, tzName))
+	startSched, err1 := cron.ParseStandard(cronExprFromLoc(cfg.ScheduleStart, loc))
+	stopSched, err2 := cron.ParseStandard(cronExprFromLoc(cfg.ScheduleStop, loc))
 	if err1 != nil || err2 != nil {
 		// Invalid expressions — don't block access.
 		return true, time.Time{}
@@ -154,7 +164,8 @@ func (sm *ScheduleManager) Start(ctx context.Context) {
 // Sync diffs the registered cron entries against the provided container list.
 // It removes all existing entries and re-registers from scratch, making it
 // safe to call repeatedly on config hot-reloads.
-func (sm *ScheduleManager) Sync(containers []ContainerConfig, tzName string) {
+// loc is the global timezone; individual containers may override it via ScheduleTimezone.
+func (sm *ScheduleManager) Sync(containers []ContainerConfig, loc *time.Location) {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 
@@ -172,10 +183,19 @@ func (sm *ScheduleManager) Sync(containers []ContainerConfig, tzName string) {
 			continue
 		}
 		cfg := c // capture loop variable for closures
+
+		// Determine effective timezone: per-container overrides global.
+		effectiveLoc := loc
+		if cfg.ScheduleTimezone != "" {
+			if l, err := resolveLocation(cfg.ScheduleTimezone); err == nil {
+				effectiveLoc = l
+			}
+		}
+
 		var ids []cron.EntryID
 
 		if cfg.ScheduleStart != "" {
-			id, err := sm.cron.AddFunc(cronExpr(cfg.ScheduleStart, tzName), func() {
+			id, err := sm.cron.AddFunc(cronExprFromLoc(cfg.ScheduleStart, effectiveLoc), func() {
 				ctx, cancel := context.WithTimeout(context.Background(), cfg.StartTimeout)
 				defer cancel()
 				sm.manager.InitStartState(cfg.Name)
@@ -193,7 +213,7 @@ func (sm *ScheduleManager) Sync(containers []ContainerConfig, tzName string) {
 		}
 
 		if cfg.ScheduleStop != "" {
-			id, err := sm.cron.AddFunc(cronExpr(cfg.ScheduleStop, tzName), func() {
+			id, err := sm.cron.AddFunc(cronExprFromLoc(cfg.ScheduleStop, effectiveLoc), func() {
 				ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 				defer cancel()
 				if err := sm.client.StopContainer(ctx, cfg.Name); err != nil {

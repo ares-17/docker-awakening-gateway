@@ -38,8 +38,7 @@ type Server struct {
 	rateLimiter  *rateLimiter
 	groupRouter  *GroupRouter
 	scheduler    *ScheduleManager
-	scheduleTZ   string
-	schedLoc     *time.Location  // resolved from scheduleTZ; never nil (defaults to time.Local)
+	schedLoc     *time.Location // resolved from gateway.schedule_timezone; never nil (defaults to time.Local)
 	httpServer   *http.Server
 }
 
@@ -54,7 +53,6 @@ func NewServer(manager *ContainerManager, scheduler *ScheduleManager, cfg *Gatew
 	return &Server{
 		manager:      manager,
 		scheduler:    scheduler,
-		scheduleTZ:   cfg.Gateway.ScheduleTimezone,
 		schedLoc:     loc,
 		cfg:          cfg,
 		hostIndex:    BuildHostIndex(cfg),
@@ -134,14 +132,13 @@ func (s *Server) ReloadConfig(newCfg *GatewayConfig) {
 	s.configMu.Lock()
 	defer s.configMu.Unlock()
 	s.cfg = newCfg
-	s.scheduleTZ = newCfg.Gateway.ScheduleTimezone
 	loc, _ := resolveLocation(newCfg.Gateway.ScheduleTimezone)
 	s.schedLoc = loc
 	s.hostIndex = BuildHostIndex(newCfg)
 	s.groupIndex = BuildGroupHostIndex(newCfg)
 	s.containerMap = BuildContainerMap(newCfg)
 	s.trustedCIDRs = parseTrustedProxies(newCfg.Gateway.TrustedProxies)
-	s.scheduler.Sync(newCfg.Containers, newCfg.Gateway.ScheduleTimezone)
+	s.scheduler.Sync(newCfg.Containers, s.schedLoc)
 }
 
 // GetConfig safely retrieves the current configuration.
@@ -222,7 +219,7 @@ func (s *Server) handleRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Read cfg, scheduleTZ, and schedLoc atomically under a single lock to
+	// Read cfg and schedLoc atomically under a single lock to
 	// prevent a concurrent hot-reload from swapping the config between reads.
 	s.configMu.RLock()
 	var cfg *ContainerConfig
@@ -244,8 +241,7 @@ func (s *Server) handleRequest(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	tz := s.scheduleTZ
-	loc := s.schedLoc
+	schedLoc := s.schedLoc
 	s.configMu.RUnlock()
 
 	if cfg == nil {
@@ -253,9 +249,17 @@ func (s *Server) handleRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Determine effective timezone: per-container overrides global.
+	effectiveLoc := schedLoc
+	if cfg.ScheduleTimezone != "" {
+		if l, err := resolveLocation(cfg.ScheduleTimezone); err == nil {
+			effectiveLoc = l
+		}
+	}
+
 	// Schedule gate: block access outside the configured cron window.
-	if allowed, nextStart := IsInScheduleWindow(cfg, time.Now(), tz); !allowed {
-		s.serveScheduledPage(w, r, cfg, nextStart, loc)
+	if allowed, nextStart := IsInScheduleWindow(cfg, time.Now(), effectiveLoc); !allowed {
+		s.serveScheduledPage(w, r, cfg, nextStart, effectiveLoc)
 		return
 	}
 

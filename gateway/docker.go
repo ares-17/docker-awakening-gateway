@@ -153,6 +153,9 @@ func (d *DockerClient) DiscoverLabeledContainers(ctx context.Context) ([]Contain
 		if val, ok := c.Labels["dag.schedule_stop"]; ok && val != "" {
 			cfg.ScheduleStop = val
 		}
+		if val, ok := c.Labels["dag.schedule_timezone"]; ok && val != "" {
+			cfg.ScheduleTimezone = val
+		}
 
 		configs = append(configs, cfg)
 	}
