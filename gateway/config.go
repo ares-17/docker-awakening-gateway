@@ -271,7 +271,7 @@ func (c *GatewayConfig) Validate() error {
 
 		// Validate schedule expressions if present.
 		if ctr.ScheduleStart != "" || ctr.ScheduleStop != "" {
-			if err := validateScheduleCompatibility(ctr.ScheduleStart, ctr.ScheduleStop); err != nil {
+			if err := validateScheduleCompatibility(ctr.ScheduleStart, ctr.ScheduleStop, c.Gateway.ScheduleTimezone); err != nil {
 				return fmt.Errorf("container %q: %w", ctr.Name, err)
 			}
 		}

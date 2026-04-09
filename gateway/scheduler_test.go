@@ -6,6 +6,26 @@ import (
 )
 
 
+// ─── cronExpr ────────────────────────────────────────────────────────────────
+
+func TestCronExpr(t *testing.T) {
+	tests := []struct {
+		expr   string
+		tzName string
+		want   string
+	}{
+		{"0 8 * * *", "", "0 8 * * *"},
+		{"0 8 * * *", "Europe/Rome", "CRON_TZ=Europe/Rome 0 8 * * *"},
+		{"", "Europe/Rome", ""},
+	}
+	for _, tt := range tests {
+		got := cronExpr(tt.expr, tt.tzName)
+		if got != tt.want {
+			t.Errorf("cronExpr(%q, %q) = %q, want %q", tt.expr, tt.tzName, got, tt.want)
+		}
+	}
+}
+
 // ─── validateScheduleCompatibility ───────────────────────────────────────────
 
 func TestScheduleCompatibility(t *testing.T) {
@@ -29,7 +49,7 @@ func TestScheduleCompatibility(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := validateScheduleCompatibility(tt.start, tt.stop)
+			err := validateScheduleCompatibility(tt.start, tt.stop, "")
 			if (err != nil) != tt.wantErr {
 				t.Errorf("validateScheduleCompatibility(%q, %q) error = %v, wantErr %v",
 					tt.start, tt.stop, err, tt.wantErr)
@@ -109,7 +129,7 @@ func TestIsInScheduleWindow(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			allowed, nextStart := IsInScheduleWindow(&tt.cfg, tt.now)
+			allowed, nextStart := IsInScheduleWindow(&tt.cfg, tt.now, "")
 			if allowed != tt.wantAllowed {
 				t.Errorf("IsInScheduleWindow() allowed = %v, want %v", allowed, tt.wantAllowed)
 			}
@@ -121,6 +141,40 @@ func TestIsInScheduleWindow(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestIsInScheduleWindowWithTimezone(t *testing.T) {
+	// 10:10 Rome time (CEST = UTC+2) = 08:10 UTC
+	// stop:  "0 8 * * *" Rome  → 08:00 Rome = 06:00 UTC — fired 2h10m ago UTC
+	// start: "0 11 * * *" Rome → 11:00 Rome = 09:00 UTC — not yet fired
+	rome, err := time.LoadLocation("Europe/Rome")
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 4, 9, 10, 10, 0, 0, rome) // 10:10 Rome
+
+	cfg := ContainerConfig{
+		ScheduleStart: "0 11 * * *",
+		ScheduleStop:  "0 8 * * *",
+	}
+
+	t.Run("outside window with Rome timezone", func(t *testing.T) {
+		allowed, nextStart := IsInScheduleWindow(&cfg, now, "Europe/Rome")
+		if allowed {
+			t.Error("expected blocked outside window, got allowed")
+		}
+		if nextStart.IsZero() {
+			t.Error("expected non-zero nextStart")
+		}
+	})
+
+	t.Run("inside window with Rome timezone (12:00 Rome)", func(t *testing.T) {
+		noon := time.Date(2026, 4, 9, 12, 0, 0, 0, rome)
+		allowed, _ := IsInScheduleWindow(&cfg, noon, "Europe/Rome")
+		if !allowed {
+			t.Error("expected allowed inside window at noon Rome time")
+		}
+	})
 }
 
 // ─── ScheduleManager ─────────────────────────────────────────────────────────
@@ -135,7 +189,7 @@ func TestScheduleManagerSync(t *testing.T) {
 			{Name: "db", ScheduleStart: "0 7 * * *", StartTimeout: 30 * time.Second},
 			{Name: "cache"}, // no schedule
 		}
-		sm.Sync(containers)
+		sm.Sync(containers, "")
 
 		// app has start+stop = 2 entries; db has start only = 1; cache = 0
 		if got := len(sm.cron.Entries()); got != 3 {
@@ -162,7 +216,7 @@ func TestScheduleManagerSync(t *testing.T) {
 		updated := []ContainerConfig{
 			{Name: "app", ScheduleStart: "0 9 * * *", ScheduleStop: "0 21 * * *", StartTimeout: 60 * time.Second},
 		}
-		sm.Sync(updated)
+		sm.Sync(updated, "")
 
 		if got := len(sm.cron.Entries()); got != 2 {
 			t.Errorf("after re-sync expected 2 cron entries, got %d", got)
@@ -173,7 +227,7 @@ func TestScheduleManagerSync(t *testing.T) {
 	})
 
 	t.Run("sync with nil removes all entries", func(t *testing.T) {
-		sm.Sync(nil)
+		sm.Sync(nil, "")
 
 		if got := len(sm.cron.Entries()); got != 0 {
 			t.Errorf("after empty sync expected 0 cron entries, got %d", got)

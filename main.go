@@ -52,7 +52,7 @@ func main() {
 
 	// Start scheduler and register initial jobs.
 	scheduler.Start(ctx)
-	scheduler.Sync(cfg.Containers)
+	scheduler.Sync(cfg.Containers, "")
 	slog.Info("scheduler started")
 
 	// Start idle-watcher goroutine with a callback to get the latest config

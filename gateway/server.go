@@ -132,7 +132,7 @@ func (s *Server) ReloadConfig(newCfg *GatewayConfig) {
 	s.groupIndex = BuildGroupHostIndex(newCfg)
 	s.containerMap = BuildContainerMap(newCfg)
 	s.trustedCIDRs = parseTrustedProxies(newCfg.Gateway.TrustedProxies)
-	s.scheduler.Sync(newCfg.Containers)
+	s.scheduler.Sync(newCfg.Containers, "")
 }
 
 // GetConfig safely retrieves the current configuration.
@@ -220,7 +220,7 @@ func (s *Server) handleRequest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Schedule gate: block access outside the configured cron window.
-	if allowed, nextStart := IsInScheduleWindow(cfg, time.Now()); !allowed {
+	if allowed, nextStart := IsInScheduleWindow(cfg, time.Now(), ""); !allowed {
 		s.serveScheduledPage(w, r, cfg, nextStart)
 		return
 	}
