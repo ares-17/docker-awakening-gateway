@@ -5,6 +5,7 @@
 
 gateway:
   port: "8080"
+  schedule_timezone: "Europe/Rome"
   log_lines: 30
   # discovery_interval: "15s"  # label polling frequency (default: 15s, or DISCOVERY_INTERVAL env var)
 
@@ -41,3 +42,27 @@ containers:
     start_timeout: "8s"
     idle_timeout: "0"
     redirect_path: "/"
+
+  # ------------------------------------------------------------------
+  # sched-offline: mostra la pagina "Scheduled Downtime" subito.
+  # schedule_stop sparato alle 10:00, schedule_start alle 11:00.
+  # Visita http://sched-offline.localhost:8080 → pagina offline.
+  # ------------------------------------------------------------------
+  - name: "sched-offline"
+    host: "sched-offline.localhost:8080"
+    target_port: "80"
+    idle_timeout: "0"
+    schedule_stop: "0 8 * * *"     # 08:00 UTC = 10:00 IT — sparato 10 min fa
+    schedule_start: "35 8 * * *"    # 09:00 UTC = 10:35 IT — prossimo start
+
+  # ------------------------------------------------------------------
+  # sched-live: testa il cron reale.
+  # schedule_start alle 10:16, schedule_stop alle 10:17.
+  # Avvia docker-compose entro le 10:15 e guarda i log.
+  # ------------------------------------------------------------------
+  - name: "sched-live"
+    host: "sched-live.localhost:8080"
+    target_port: "80"
+    idle_timeout: "0"
+    schedule_start: "16 8 * * *"   # 08:16 UTC = 10:16 IT
+    schedule_stop:  "40 8 * * *"   # 08:17 UTC = 10:40 IT
