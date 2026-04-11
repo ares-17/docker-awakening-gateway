@@ -32,3 +32,6 @@ exclude:
   - ROADMAP_AUDIT.md
   - PROJECT_PLAN.md
   - claude.md
+  - medium-post.md
+  - linkedin-post.md
+  - superpowers/

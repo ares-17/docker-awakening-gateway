@@ -39,3 +39,6 @@ docs/superpowers/
 
 # Generated test artifacts
 coverage.out
+
+# Git worktrees
+.worktrees/
