@@ -1,0 +1,6 @@
+gateway:
+  port: "8080"
+  log_lines: 30
+  discovery_interval: "10s"
+  admin_auth:
+    method: "none"

@@ -25,9 +25,22 @@ Built as a single static Go binary — ideal for home labs, edge devices, and re
   <a href="https://ares-17.github.io/docker-awakening-gateway/">
     <img src="https://img.shields.io/badge/📖_Read_the_documentation_»-2a788e?style=for-the-badge" alt="Read the documentation" />
   </a>
+  &nbsp;
+  <a href="https://codespaces.new/ares-17/docker-gateway">
+    <img src="https://github.com/codespaces/badge.svg" alt="Open in GitHub Codespaces" />
+  </a>
 </p>
 
 ---
+
+<!-- Hero image: generate with the AI prompt in docs/superpowers/specs/2026-04-11-demo-environment-design.md
+     then save as docs/assets/images/hero.png and uncomment the block below
+
+<p align="center">
+  <img src="docs/assets/images/hero.png" alt="docker-gateway — wake on request" width="100%" />
+</p>
+
+-->
 
 <table>
 <tr>

@@ -1,0 +1,88 @@
+services:
+  # ============================================================
+  # Docker Awakening Gateway — demo configuration
+  # ============================================================
+  gateway:
+    build: .
+    container_name: docker-gateway-demo
+    ports:
+      - "8080:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./config.demo.yaml:/etc/gateway/config.yaml:ro
+    environment:
+      - CONFIG_PATH=/etc/gateway/config.yaml
+    restart: unless-stopped
+
+  # ============================================================
+  # DEMO — slow-app
+  # Simulates a 15-second boot. Shows the live loading page,
+  # log streaming, progress bar, and auto-redirect.
+  # Try: curl -H 'Host: slow-app.localhost' http://localhost:8080/
+  # ============================================================
+  slow-app:
+    image: nginx:alpine
+    container_name: demo-slow-app
+    labels:
+      - "dag.enabled=true"
+      - "dag.host=slow-app.localhost"
+      - "dag.icon=nginx"
+      - "dag.target_port=80"
+      - "dag.start_timeout=60s"
+      - "dag.idle_timeout=10m"
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        echo "slow-app: initialising..."
+        sleep 5
+        echo "slow-app: loading modules..."
+        sleep 5
+        echo "slow-app: applying config..."
+        sleep 5
+        echo "slow-app: ready"
+        nginx -g 'daemon off;'
+
+  # ============================================================
+  # DEMO — fail-app
+  # Crashes immediately. Shows the gateway error page.
+  # Try: curl -H 'Host: fail-app.localhost' http://localhost:8080/
+  # ============================================================
+  fail-app:
+    image: alpine
+    container_name: demo-fail-app
+    labels:
+      - "dag.enabled=true"
+      - "dag.host=fail-app.localhost"
+      - "dag.icon=alpinelinux"
+      - "dag.start_timeout=10s"
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        echo "fail-app: starting up..."
+        echo "fail-app: ERROR — fatal misconfiguration"
+        exit 1
+
+  # ============================================================
+  # DEMO — dashboard (Uptime Kuma)
+  # A real application with a natural boot time (~10s).
+  # Shows the gateway handling a production-style service.
+  # Try: curl -H 'Host: dashboard.localhost' http://localhost:8080/
+  # ============================================================
+  dashboard:
+    image: louislam/uptime-kuma:latest
+    container_name: demo-dashboard
+    labels:
+      - "dag.enabled=true"
+      - "dag.host=dashboard.localhost"
+      - "dag.icon=uptimekuma"
+      - "dag.target_port=3001"
+      - "dag.start_timeout=60s"
+      - "dag.idle_timeout=15m"
+      - "dag.health_path=/"
+    volumes:
+      - uptime-kuma-data:/app/data
+
+volumes:
+  uptime-kuma-data:
