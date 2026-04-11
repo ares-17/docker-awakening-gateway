@@ -33,14 +33,11 @@ Built as a single static Go binary — ideal for home labs, edge devices, and re
 
 ---
 
-<!-- Hero image: generate with the AI prompt in docs/superpowers/specs/2026-04-11-demo-environment-design.md
-     then save as docs/assets/images/hero.png and uncomment the block below
-
 <p align="center">
   <img src="docs/assets/images/hero.png" alt="docker-gateway — wake on request" width="100%" />
 </p>
 
--->
+---
 
 <table>
 <tr>
