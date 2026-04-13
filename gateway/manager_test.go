@@ -281,3 +281,101 @@ func TestBuildReverseDeps(t *testing.T) {
 		}
 	})
 }
+
+// ─── RecordActivityChain ──────────────────────────────────────────────────────
+
+func TestRecordActivityChain(t *testing.T) {
+	t.Run("single container no deps: only root updated", func(t *testing.T) {
+		m := NewContainerManager(nil)
+		cfgs := []ContainerConfig{
+			{Name: "app", Host: "app.local"},
+		}
+		before := time.Now()
+		m.RecordActivityChain([]string{"app"}, cfgs)
+		after := time.Now()
+
+		ts, ok := m.GetLastSeen("app")
+		if !ok {
+			t.Fatal("expected app in lastSeen")
+		}
+		if ts.Before(before) || ts.After(after) {
+			t.Errorf("timestamp %v not in range [%v, %v]", ts, before, after)
+		}
+	})
+
+	t.Run("linear chain A→B→C: all three updated", func(t *testing.T) {
+		m := NewContainerManager(nil)
+		cfgs := []ContainerConfig{
+			{Name: "app", Host: "app.local", DependsOn: []string{"api"}},
+			{Name: "api", DependsOn: []string{"db"}},
+			{Name: "db"},
+		}
+		before := time.Now()
+		m.RecordActivityChain([]string{"app"}, cfgs)
+		after := time.Now()
+
+		for _, name := range []string{"app", "api", "db"} {
+			ts, ok := m.GetLastSeen(name)
+			if !ok {
+				t.Fatalf("expected %q in lastSeen", name)
+			}
+			if ts.Before(before) || ts.After(after) {
+				t.Errorf("%q timestamp %v not in range [%v, %v]", name, ts, before, after)
+			}
+		}
+	})
+
+	t.Run("multiple roots: union of deps updated", func(t *testing.T) {
+		m := NewContainerManager(nil)
+		cfgs := []ContainerConfig{
+			{Name: "app", Host: "app.local", DependsOn: []string{"db"}},
+			{Name: "other", Host: "other.local", DependsOn: []string{"redis"}},
+			{Name: "db"},
+			{Name: "redis"},
+		}
+		before := time.Now()
+		m.RecordActivityChain([]string{"app", "other"}, cfgs)
+		after := time.Now()
+
+		for _, name := range []string{"app", "db", "other", "redis"} {
+			ts, ok := m.GetLastSeen(name)
+			if !ok {
+				t.Fatalf("expected %q in lastSeen", name)
+			}
+			if ts.Before(before) || ts.After(after) {
+				t.Errorf("%q timestamp %v not in range", name, ts)
+			}
+		}
+	})
+
+	t.Run("unknown root: falls back to RecordActivity, no panic", func(t *testing.T) {
+		m := NewContainerManager(nil)
+		cfgs := []ContainerConfig{
+			{Name: "other", Host: "other.local"},
+		}
+		m.RecordActivityChain([]string{"ghost"}, cfgs)
+
+		ts, ok := m.GetLastSeen("ghost")
+		if !ok {
+			t.Fatal("expected ghost in lastSeen via fallback RecordActivity")
+		}
+		if ts.IsZero() {
+			t.Error("expected non-zero timestamp")
+		}
+	})
+
+	t.Run("shared dep updated once (deduplication)", func(t *testing.T) {
+		m := NewContainerManager(nil)
+		cfgs := []ContainerConfig{
+			{Name: "app", Host: "app.local", DependsOn: []string{"db"}},
+			{Name: "other", Host: "other.local", DependsOn: []string{"db"}},
+			{Name: "db"},
+		}
+		m.RecordActivityChain([]string{"app", "other"}, cfgs)
+
+		_, ok := m.GetLastSeen("db")
+		if !ok {
+			t.Fatal("expected db in lastSeen")
+		}
+	})
+}

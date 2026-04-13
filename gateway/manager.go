@@ -87,6 +87,39 @@ func (m *ContainerManager) RecordActivity(containerName string) {
 	m.mu.Unlock()
 }
 
+// RecordActivityChain records activity for each root container and all of its
+// transitive dependencies. Use this in place of RecordActivity at server call
+// sites, where the full container config is available.
+//
+// If TopologicalSort fails for a root (e.g. container not yet in config during
+// a discovery lag), RecordActivity is called for that root as a silent fallback.
+func (m *ContainerManager) RecordActivityChain(roots []string, allContainers []ContainerConfig) {
+	now := time.Now()
+	toUpdate := make(map[string]struct{})
+
+	for _, root := range roots {
+		chain, err := TopologicalSort(root, allContainers)
+		if err != nil {
+			// Transient condition (discovery lag): fall back to recording the root only.
+			m.RecordActivity(root)
+			continue
+		}
+		for _, name := range chain {
+			toUpdate[name] = struct{}{}
+		}
+	}
+
+	if len(toUpdate) == 0 {
+		return
+	}
+
+	m.mu.Lock()
+	for name := range toUpdate {
+		m.lastSeen[name] = now
+	}
+	m.mu.Unlock()
+}
+
 // GetLastSeen returns the last activity timestamp for a container.
 // Used by the /_status endpoint to show "Last Request" time.
 func (m *ContainerManager) GetLastSeen(containerName string) (time.Time, bool) {
