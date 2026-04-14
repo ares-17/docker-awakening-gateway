@@ -30,6 +30,30 @@ containers:
 
 
   # ------------------------------------------------------------------
+  # TOPOLOGY DEMO — frontend → backend → db
+  # Remove once the topology view demo is no longer needed.
+  # ------------------------------------------------------------------
+  - name: "demo-frontend"
+    host: "demo-frontend.localhost:8080"
+    icon: "react"
+    target_port: "80"
+    idle_timeout: "10m"
+    depends_on: ["demo-backend"]
+
+  - name: "demo-backend"
+    host: "demo-backend.localhost:8080"
+    icon: "go"
+    target_port: "80"
+    idle_timeout: "10m"
+    depends_on: ["demo-db"]
+
+  - name: "demo-db"
+    host: "demo-db.localhost:8080"
+    icon: "postgresql"
+    target_port: "80"
+    idle_timeout: "10m"
+
+  # ------------------------------------------------------------------
   # fail-app: always exits immediately with code 1.
   # Tests: start_timeout expiry → error page.
   # Use a short start_timeout so the error page shows quickly.

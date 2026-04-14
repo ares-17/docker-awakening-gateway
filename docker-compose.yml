@@ -63,3 +63,25 @@ services:
   sched-live:
     image: nginx:alpine
     container_name: sched-live
+
+  # ============================================================
+  # TOPOLOGY DEMO — frontend → backend → db
+  # Three extremely lightweight containers (busybox httpd, ~5 MB)
+  # that show a depends_on chain in the topology view.
+  # Remove this block once the topology demo is no longer needed.
+  # ============================================================
+  demo-frontend:
+    image: busybox:latest
+    container_name: demo-frontend
+    entrypoint: ["/bin/sh", "-c", "httpd -f -p 80 -h /var/www && echo ok"]
+    # NOTE: no restart — gateway manages start/stop
+
+  demo-backend:
+    image: busybox:latest
+    container_name: demo-backend
+    entrypoint: ["/bin/sh", "-c", "httpd -f -p 80 -h /var/www && echo ok"]
+
+  demo-db:
+    image: busybox:latest
+    container_name: demo-db
+    entrypoint: ["/bin/sh", "-c", "httpd -f -p 80 -h /var/www && echo ok"]
