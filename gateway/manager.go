@@ -87,6 +87,39 @@ func (m *ContainerManager) RecordActivity(containerName string) {
 	m.mu.Unlock()
 }
 
+// RecordActivityChain records activity for each root container and all of its
+// transitive dependencies. Use this in place of RecordActivity at server call
+// sites, where the full container config is available.
+//
+// If TopologicalSort fails for a root (e.g. container not yet in config during
+// a discovery lag), RecordActivity is called for that root as a silent fallback.
+func (m *ContainerManager) RecordActivityChain(roots []string, allContainers []ContainerConfig) {
+	now := time.Now()
+	toUpdate := make(map[string]struct{})
+
+	for _, root := range roots {
+		chain, err := TopologicalSort(root, allContainers)
+		if err != nil {
+			// Transient condition (discovery lag): fall back to recording the root only.
+			m.RecordActivity(root)
+			continue
+		}
+		for _, name := range chain {
+			toUpdate[name] = struct{}{}
+		}
+	}
+
+	if len(toUpdate) == 0 {
+		return
+	}
+
+	m.mu.Lock()
+	for name := range toUpdate {
+		m.lastSeen[name] = now
+	}
+	m.mu.Unlock()
+}
+
 // GetLastSeen returns the last activity timestamp for a container.
 // Used by the /_status endpoint to show "Last Request" time.
 func (m *ContainerManager) GetLastSeen(containerName string) (time.Time, bool) {
@@ -94,6 +127,18 @@ func (m *ContainerManager) GetLastSeen(containerName string) (time.Time, bool) {
 	defer m.mu.Unlock()
 	t, ok := m.lastSeen[containerName]
 	return t, ok
+}
+
+// BuildReverseDeps returns, for each container D, the list of containers that
+// declare D in their DependsOn field (direct dependents only).
+func BuildReverseDeps(cfgs []ContainerConfig) map[string][]string {
+	rev := make(map[string][]string)
+	for _, cfg := range cfgs {
+		for _, dep := range cfg.DependsOn {
+			rev[dep] = append(rev[dep], cfg.Name)
+		}
+	}
+	return rev
 }
 
 // EnsureRunning checks whether a container is running and, if not, starts it.
@@ -251,6 +296,103 @@ func (m *ContainerManager) EnsureGroupRunning(ctx context.Context, group *GroupC
 // 	return nil
 // }
 
+// topoMergeStop returns a topological ordering of the nodes in toStop,
+// respecting only the DependsOn edges whose destination is also in toStop.
+// Result order: [deepest dependency, ..., entry-point].
+// No cycle detection needed: cycles are prevented at config load time.
+func topoMergeStop(toStop map[string]struct{}, cfgs []ContainerConfig) []string {
+	cfgMap := make(map[string]*ContainerConfig, len(cfgs))
+	for i := range cfgs {
+		cfgMap[cfgs[i].Name] = &cfgs[i]
+	}
+
+	visited := make(map[string]bool, len(toStop))
+	order := make([]string, 0, len(toStop))
+
+	var visit func(name string)
+	visit = func(name string) {
+		if visited[name] {
+			return
+		}
+		visited[name] = true
+		if cfg, ok := cfgMap[name]; ok {
+			for _, dep := range cfg.DependsOn {
+				if _, inSet := toStop[dep]; inSet {
+					visit(dep)
+				}
+			}
+		}
+		order = append(order, name)
+	}
+
+	for name := range toStop {
+		visit(name)
+	}
+	return order
+}
+
+// cascadeStop stops all containers in the dependency chains of the given
+// idle entry-points. Stop order is reverse topological (entry-point first,
+// deepest dep last). A dependency is skipped if any running container outside
+// the shutdown set still depends on it.
+func (m *ContainerManager) cascadeStop(ctx context.Context, idleEntryPoints []string, cfgs []ContainerConfig) {
+	toStop := make(map[string]struct{})
+	for _, ep := range idleEntryPoints {
+		chain, err := TopologicalSort(ep, cfgs)
+		if err != nil {
+			slog.Warn("idle watcher: skipping entry-point (topo sort failed)",
+				"container", ep, "error", err)
+			continue
+		}
+		for _, name := range chain {
+			toStop[name] = struct{}{}
+		}
+	}
+	if len(toStop) == 0 {
+		return
+	}
+
+	revDeps := BuildReverseDeps(cfgs)
+	order := topoMergeStop(toStop, cfgs)
+
+	for i := len(order) - 1; i >= 0; i-- {
+		name := order[i]
+
+		safe := true
+		for _, dependent := range revDeps[name] {
+			if _, willStop := toStop[dependent]; willStop {
+				continue
+			}
+			depStatus, err := m.client.GetContainerStatus(ctx, dependent)
+			if err == nil && depStatus == "running" {
+				slog.Info("idle watcher: skipping dep (still needed)",
+					"dep", name, "needed_by", dependent)
+				safe = false
+				break
+			}
+		}
+		if !safe {
+			continue
+		}
+
+		status, err := m.client.GetContainerStatus(ctx, name)
+		if err != nil || status != "running" {
+			continue
+		}
+
+		slog.Info("idle watcher: cascade stopping container",
+			"container", name, "reason", "cascade_idle",
+			"triggered_by", idleEntryPoints)
+		if err := m.client.StopContainer(ctx, name); err != nil {
+			slog.Error("idle watcher: cascade stop failed",
+				"container", name, "error", err)
+		} else {
+			RecordIdleStop(name)
+			m.setStartState(name, "unknown", "")
+		}
+	}
+}
+
 // StartIdleWatcher begins a background routine that periodically checks
 // container activity. If a container's idle_timeout is reached, it shuts it down.
 func (m *ContainerManager) StartIdleWatcher(ctx context.Context, configProvider func() []ContainerConfig) {
@@ -277,28 +419,23 @@ func (m *ContainerManager) checkIdle(ctx context.Context, cfgs []ContainerConfig
 	m.mu.Unlock()
 
 	now := time.Now()
+	var idleEntryPoints []string
 	for _, cfg := range cfgs {
-		if cfg.IdleTimeout == 0 {
+		// Only entry-points (Host != "") govern idle shutdown.
+		// Pure deps (no Host) are stopped only as part of an entry-point's cascade.
+		if cfg.Host == "" || cfg.IdleTimeout == 0 {
 			continue
 		}
 		last, seen := snapshot[cfg.Name]
 		if !seen {
 			continue
 		}
-		idleDuration := now.Sub(last)
-		if idleDuration < cfg.IdleTimeout {
-			continue
+		if now.Sub(last) >= cfg.IdleTimeout {
+			idleEntryPoints = append(idleEntryPoints, cfg.Name)
 		}
-		status, err := m.client.GetContainerStatus(ctx, cfg.Name)
-		if err != nil || status != "running" {
-			continue
-		}
-		slog.Info("idle watcher: stopping container", "container", cfg.Name, "idle_duration", idleDuration, "idle_timeout", cfg.IdleTimeout)
-		if err := m.client.StopContainer(ctx, cfg.Name); err != nil {
-			slog.Error("idle watcher: failed to stop container", "container", cfg.Name, "error", err)
-		} else {
-			RecordIdleStop(cfg.Name)
-			m.setStartState(cfg.Name, "unknown", "")
-		}
+	}
+
+	if len(idleEntryPoints) > 0 {
+		m.cascadeStop(ctx, idleEntryPoints, cfgs)
 	}
 }

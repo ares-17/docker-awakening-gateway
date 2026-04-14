@@ -1,6 +1,7 @@
 package gateway
 
 import (
+	"context"
 	"sync"
 	"testing"
 	"time"
@@ -207,4 +208,457 @@ func TestCalcIdleRemaining(t *testing.T) {
 			}
 		})
 	}
+}
+
+// ─── BuildReverseDeps ─────────────────────────────────────────────────────────
+
+func TestBuildReverseDeps(t *testing.T) {
+	t.Run("empty config returns empty map", func(t *testing.T) {
+		got := BuildReverseDeps(nil)
+		if len(got) != 0 {
+			t.Errorf("expected empty map, got %v", got)
+		}
+	})
+
+	t.Run("no dependencies returns empty map", func(t *testing.T) {
+		cfgs := []ContainerConfig{
+			{Name: "app", Host: "app.local"},
+			{Name: "db"},
+		}
+		got := BuildReverseDeps(cfgs)
+		if len(got) != 0 {
+			t.Errorf("expected empty map, got %v", got)
+		}
+	})
+
+	t.Run("linear chain A→B→C", func(t *testing.T) {
+		cfgs := []ContainerConfig{
+			{Name: "app", Host: "app.local", DependsOn: []string{"api"}},
+			{Name: "api", DependsOn: []string{"db"}},
+			{Name: "db"},
+		}
+		got := BuildReverseDeps(cfgs)
+		if len(got["api"]) != 1 || got["api"][0] != "app" {
+			t.Errorf("got[api] = %v, want [app]", got["api"])
+		}
+		if len(got["db"]) != 1 || got["db"][0] != "api" {
+			t.Errorf("got[db] = %v, want [api]", got["db"])
+		}
+		if len(got["app"]) != 0 {
+			t.Errorf("got[app] = %v, want []", got["app"])
+		}
+	})
+
+	t.Run("diamond A→[B,C]→D: D has two dependents", func(t *testing.T) {
+		cfgs := []ContainerConfig{
+			{Name: "app", Host: "app.local", DependsOn: []string{"api", "worker"}},
+			{Name: "api", DependsOn: []string{"db"}},
+			{Name: "worker", DependsOn: []string{"db"}},
+			{Name: "db"},
+		}
+		got := BuildReverseDeps(cfgs)
+		dbDeps := got["db"]
+		if len(dbDeps) != 2 {
+			t.Fatalf("got[db] length = %d, want 2; got %v", len(dbDeps), dbDeps)
+		}
+		found := map[string]bool{"api": false, "worker": false}
+		for _, d := range dbDeps {
+			found[d] = true
+		}
+		if !found["api"] || !found["worker"] {
+			t.Errorf("got[db] = %v, want [api worker] (any order)", dbDeps)
+		}
+	})
+
+	t.Run("shared dep: A→D and B→D produces D:[A,B]", func(t *testing.T) {
+		cfgs := []ContainerConfig{
+			{Name: "app", Host: "app.local", DependsOn: []string{"db"}},
+			{Name: "other", Host: "other.local", DependsOn: []string{"db"}},
+			{Name: "db"},
+		}
+		got := BuildReverseDeps(cfgs)
+		if len(got["db"]) != 2 {
+			t.Errorf("got[db] length = %d, want 2; got %v", len(got["db"]), got["db"])
+		}
+	})
+}
+
+// ─── RecordActivityChain ──────────────────────────────────────────────────────
+
+func TestRecordActivityChain(t *testing.T) {
+	t.Run("single container no deps: only root updated", func(t *testing.T) {
+		m := NewContainerManager(nil)
+		cfgs := []ContainerConfig{
+			{Name: "app", Host: "app.local"},
+		}
+		before := time.Now()
+		m.RecordActivityChain([]string{"app"}, cfgs)
+		after := time.Now()
+
+		ts, ok := m.GetLastSeen("app")
+		if !ok {
+			t.Fatal("expected app in lastSeen")
+		}
+		if ts.Before(before) || ts.After(after) {
+			t.Errorf("timestamp %v not in range [%v, %v]", ts, before, after)
+		}
+	})
+
+	t.Run("linear chain A→B→C: all three updated", func(t *testing.T) {
+		m := NewContainerManager(nil)
+		cfgs := []ContainerConfig{
+			{Name: "app", Host: "app.local", DependsOn: []string{"api"}},
+			{Name: "api", DependsOn: []string{"db"}},
+			{Name: "db"},
+		}
+		before := time.Now()
+		m.RecordActivityChain([]string{"app"}, cfgs)
+		after := time.Now()
+
+		for _, name := range []string{"app", "api", "db"} {
+			ts, ok := m.GetLastSeen(name)
+			if !ok {
+				t.Fatalf("expected %q in lastSeen", name)
+			}
+			if ts.Before(before) || ts.After(after) {
+				t.Errorf("%q timestamp %v not in range [%v, %v]", name, ts, before, after)
+			}
+		}
+	})
+
+	t.Run("multiple roots: union of deps updated", func(t *testing.T) {
+		m := NewContainerManager(nil)
+		cfgs := []ContainerConfig{
+			{Name: "app", Host: "app.local", DependsOn: []string{"db"}},
+			{Name: "other", Host: "other.local", DependsOn: []string{"redis"}},
+			{Name: "db"},
+			{Name: "redis"},
+		}
+		before := time.Now()
+		m.RecordActivityChain([]string{"app", "other"}, cfgs)
+		after := time.Now()
+
+		for _, name := range []string{"app", "db", "other", "redis"} {
+			ts, ok := m.GetLastSeen(name)
+			if !ok {
+				t.Fatalf("expected %q in lastSeen", name)
+			}
+			if ts.Before(before) || ts.After(after) {
+				t.Errorf("%q timestamp %v not in range", name, ts)
+			}
+		}
+	})
+
+	t.Run("unknown root: falls back to RecordActivity, no panic", func(t *testing.T) {
+		m := NewContainerManager(nil)
+		cfgs := []ContainerConfig{
+			{Name: "other", Host: "other.local"},
+		}
+		m.RecordActivityChain([]string{"ghost"}, cfgs)
+
+		ts, ok := m.GetLastSeen("ghost")
+		if !ok {
+			t.Fatal("expected ghost in lastSeen via fallback RecordActivity")
+		}
+		if ts.IsZero() {
+			t.Error("expected non-zero timestamp")
+		}
+	})
+
+	t.Run("shared dep updated once (deduplication)", func(t *testing.T) {
+		m := NewContainerManager(nil)
+		cfgs := []ContainerConfig{
+			{Name: "app", Host: "app.local", DependsOn: []string{"db"}},
+			{Name: "other", Host: "other.local", DependsOn: []string{"db"}},
+			{Name: "db"},
+		}
+		m.RecordActivityChain([]string{"app", "other"}, cfgs)
+
+		_, ok := m.GetLastSeen("db")
+		if !ok {
+			t.Fatal("expected db in lastSeen")
+		}
+	})
+}
+
+// ─── cascadeStop tests (via test-only hook) ───────────────────────────────────
+
+// cascadeStopWithHooks is a test-only variant of cascadeStop with injectable
+// status/stop functions, avoiding the need for a real Docker daemon.
+// It mirrors the production logic of cascadeStop exactly.
+func cascadeStopWithHooks(
+	m *ContainerManager,
+	ctx context.Context,
+	idleEntryPoints []string,
+	cfgs []ContainerConfig,
+	statusFn func(name string) (string, error),
+	stopFn func(name string) error,
+) {
+	toStop := make(map[string]struct{})
+	for _, ep := range idleEntryPoints {
+		chain, err := TopologicalSort(ep, cfgs)
+		if err != nil {
+			continue
+		}
+		for _, name := range chain {
+			toStop[name] = struct{}{}
+		}
+	}
+	if len(toStop) == 0 {
+		return
+	}
+
+	revDeps := BuildReverseDeps(cfgs)
+	order := topoMergeStop(toStop, cfgs)
+
+	for i := len(order) - 1; i >= 0; i-- {
+		name := order[i]
+
+		safe := true
+		for _, dependent := range revDeps[name] {
+			if _, willStop := toStop[dependent]; willStop {
+				continue
+			}
+			status, _ := statusFn(dependent)
+			if status == "running" {
+				safe = false
+				break
+			}
+		}
+		if !safe {
+			continue
+		}
+
+		status, err := statusFn(name)
+		if err != nil || status != "running" {
+			continue
+		}
+		if err := stopFn(name); err != nil {
+			continue
+		}
+		m.setStartState(name, "unknown", "")
+	}
+}
+
+func TestCascadeStop(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("linear chain A→B→C: stops in order A, B, C", func(t *testing.T) {
+		m := NewContainerManager(nil)
+		cfgs := []ContainerConfig{
+			{Name: "app", Host: "app.local", IdleTimeout: 30 * time.Minute, DependsOn: []string{"api"}},
+			{Name: "api", DependsOn: []string{"db"}},
+			{Name: "db"},
+		}
+
+		var stopped []string
+		var mu sync.Mutex
+		statusFn := func(name string) (string, error) { return "running", nil }
+		stopFn := func(name string) error {
+			mu.Lock()
+			stopped = append(stopped, name)
+			mu.Unlock()
+			return nil
+		}
+
+		cascadeStopWithHooks(m, ctx, []string{"app"}, cfgs, statusFn, stopFn)
+
+		mu.Lock()
+		defer mu.Unlock()
+		want := []string{"app", "api", "db"}
+		if len(stopped) != len(want) {
+			t.Fatalf("stopped = %v, want %v", stopped, want)
+		}
+		for i, name := range want {
+			if stopped[i] != name {
+				t.Errorf("stopped[%d] = %q, want %q", i, stopped[i], name)
+			}
+		}
+	})
+
+	t.Run("shared dep: A→db, B→db; B running → db NOT stopped", func(t *testing.T) {
+		m := NewContainerManager(nil)
+		cfgs := []ContainerConfig{
+			{Name: "app", Host: "app.local", IdleTimeout: 30 * time.Minute, DependsOn: []string{"db"}},
+			{Name: "other", Host: "other.local", IdleTimeout: time.Hour, DependsOn: []string{"db"}},
+			{Name: "db"},
+		}
+
+		var stopped []string
+		var mu sync.Mutex
+		statusFn := func(name string) (string, error) { return "running", nil }
+		stopFn := func(name string) error {
+			mu.Lock()
+			stopped = append(stopped, name)
+			mu.Unlock()
+			return nil
+		}
+
+		cascadeStopWithHooks(m, ctx, []string{"app"}, cfgs, statusFn, stopFn)
+
+		mu.Lock()
+		defer mu.Unlock()
+		for _, name := range stopped {
+			if name == "db" {
+				t.Errorf("db should NOT be stopped while 'other' is running; stopped=%v", stopped)
+			}
+		}
+		if len(stopped) != 1 || stopped[0] != "app" {
+			t.Errorf("expected only [app] stopped, got %v", stopped)
+		}
+	})
+
+	t.Run("shared dep: both A and B idle → db stopped", func(t *testing.T) {
+		m := NewContainerManager(nil)
+		cfgs := []ContainerConfig{
+			{Name: "app", Host: "app.local", IdleTimeout: 30 * time.Minute, DependsOn: []string{"db"}},
+			{Name: "other", Host: "other.local", IdleTimeout: 30 * time.Minute, DependsOn: []string{"db"}},
+			{Name: "db"},
+		}
+
+		var stopped []string
+		var mu sync.Mutex
+		statusFn := func(name string) (string, error) { return "running", nil }
+		stopFn := func(name string) error {
+			mu.Lock()
+			stopped = append(stopped, name)
+			mu.Unlock()
+			return nil
+		}
+
+		cascadeStopWithHooks(m, ctx, []string{"app", "other"}, cfgs, statusFn, stopFn)
+
+		mu.Lock()
+		defer mu.Unlock()
+		stoppedSet := make(map[string]bool)
+		for _, n := range stopped {
+			stoppedSet[n] = true
+		}
+		for _, want := range []string{"app", "other", "db"} {
+			if !stoppedSet[want] {
+				t.Errorf("expected %q to be stopped; stopped=%v", want, stopped)
+			}
+		}
+	})
+
+	t.Run("already stopped containers are skipped", func(t *testing.T) {
+		m := NewContainerManager(nil)
+		cfgs := []ContainerConfig{
+			{Name: "app", Host: "app.local", IdleTimeout: 30 * time.Minute, DependsOn: []string{"db"}},
+			{Name: "db"},
+		}
+
+		var stopped []string
+		var mu sync.Mutex
+		statusFn := func(name string) (string, error) {
+			if name == "db" {
+				return "exited", nil
+			}
+			return "running", nil
+		}
+		stopFn := func(name string) error {
+			mu.Lock()
+			stopped = append(stopped, name)
+			mu.Unlock()
+			return nil
+		}
+
+		cascadeStopWithHooks(m, ctx, []string{"app"}, cfgs, statusFn, stopFn)
+
+		mu.Lock()
+		defer mu.Unlock()
+		if len(stopped) != 1 || stopped[0] != "app" {
+			t.Errorf("expected only [app] stopped, got %v", stopped)
+		}
+	})
+
+	t.Run("multiple entry-points idle simultaneously: chains merged", func(t *testing.T) {
+		m := NewContainerManager(nil)
+		cfgs := []ContainerConfig{
+			{Name: "app", Host: "app.local", IdleTimeout: 30 * time.Minute, DependsOn: []string{"api"}},
+			{Name: "other", Host: "other.local", IdleTimeout: 30 * time.Minute, DependsOn: []string{"cache"}},
+			{Name: "api"},
+			{Name: "cache"},
+		}
+
+		var stopped []string
+		var mu sync.Mutex
+		statusFn := func(name string) (string, error) { return "running", nil }
+		stopFn := func(name string) error {
+			mu.Lock()
+			stopped = append(stopped, name)
+			mu.Unlock()
+			return nil
+		}
+
+		cascadeStopWithHooks(m, ctx, []string{"app", "other"}, cfgs, statusFn, stopFn)
+
+		mu.Lock()
+		defer mu.Unlock()
+		stoppedSet := make(map[string]bool)
+		for _, n := range stopped {
+			stoppedSet[n] = true
+		}
+		for _, want := range []string{"app", "api", "other", "cache"} {
+			if !stoppedSet[want] {
+				t.Errorf("expected %q stopped; got %v", want, stopped)
+			}
+		}
+	})
+}
+
+// ─── checkIdle cascade integration ───────────────────────────────────────────
+
+func TestCheckIdle_Cascade(t *testing.T) {
+	t.Run("entry-point not idle yet: no Docker call attempted", func(t *testing.T) {
+		m := NewContainerManager(nil)
+		cfgs := []ContainerConfig{
+			{Name: "app", Host: "app.local", IdleTimeout: 30 * time.Minute, DependsOn: []string{"db"}},
+			{Name: "db"},
+		}
+		m.mu.Lock()
+		m.lastSeen["app"] = time.Now().Add(-5 * time.Minute)
+		m.mu.Unlock()
+
+		defer func() {
+			if r := recover(); r != nil {
+				t.Errorf("checkIdle panicked (tried to call Docker): %v", r)
+			}
+		}()
+		m.checkIdle(context.Background(), cfgs)
+	})
+
+	t.Run("pure dep with idle_timeout and no Host: ignored by checkIdle", func(t *testing.T) {
+		m := NewContainerManager(nil)
+		cfgs := []ContainerConfig{
+			{Name: "db", IdleTimeout: time.Minute},
+		}
+		m.mu.Lock()
+		m.lastSeen["db"] = time.Now().Add(-2 * time.Minute)
+		m.mu.Unlock()
+
+		defer func() {
+			if r := recover(); r != nil {
+				t.Errorf("checkIdle panicked (tried to stop pure dep): %v", r)
+			}
+		}()
+		m.checkIdle(context.Background(), cfgs)
+	})
+
+	t.Run("zero idle_timeout: never triggers", func(t *testing.T) {
+		m := NewContainerManager(nil)
+		cfgs := []ContainerConfig{
+			{Name: "app", Host: "app.local", IdleTimeout: 0},
+		}
+		m.mu.Lock()
+		m.lastSeen["app"] = time.Now().Add(-24 * time.Hour)
+		m.mu.Unlock()
+
+		defer func() {
+			if r := recover(); r != nil {
+				t.Errorf("checkIdle panicked (zero timeout triggered stop): %v", r)
+			}
+		}()
+		m.checkIdle(context.Background(), cfgs)
+	})
 }

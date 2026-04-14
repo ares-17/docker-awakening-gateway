@@ -304,7 +304,8 @@ func (s *Server) handleRequest(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		}
-		s.manager.RecordActivity(cfg.Name)
+		allContainers := s.GetConfig().Containers
+		s.manager.RecordActivityChain([]string{cfg.Name}, allContainers)
 		s.proxyRequest(mw, r, cfg)
 		return
 	}
@@ -380,7 +381,8 @@ func (s *Server) handleGroupRequest(w http.ResponseWriter, r *http.Request, grou
 		return
 	}
 
-	s.manager.RecordActivity(pickedCfg.Name)
+	allContainers := s.GetConfig().Containers
+	s.manager.RecordActivityChain(group.Containers, allContainers)
 	s.proxyRequest(mw, r, pickedCfg)
 }
 
@@ -699,15 +701,15 @@ type statusPageData struct {
 }
 
 type statusContainerJSON struct {
-	Name         string  `json:"name"`
-	Host         string  `json:"host"`
-	Status       string  `json:"status"`
-	StartState   string  `json:"start_state"`
-	Image        string  `json:"image"`
-	Icon         string  `json:"icon"`
-	TargetPort   string  `json:"target_port"`
-	StartTimeout string  `json:"start_timeout"`
-	IdleTimeout  string  `json:"idle_timeout"`
+	Name             string  `json:"name"`
+	Host             string  `json:"host"`
+	Status           string  `json:"status"`
+	StartState       string  `json:"start_state"`
+	Image            string  `json:"image"`
+	Icon             string  `json:"icon"`
+	TargetPort       string  `json:"target_port"`
+	StartTimeout     string  `json:"start_timeout"`
+	IdleTimeout      string  `json:"idle_timeout"`
 	StartedAt        *string `json:"started_at,omitempty"`
 	LastRequest      *string `json:"last_request,omitempty"`
 	IdleTimeoutSec   int64   `json:"idle_timeout_sec"`
