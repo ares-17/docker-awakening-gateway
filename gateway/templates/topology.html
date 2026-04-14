@@ -61,6 +61,11 @@
 
         /* Post-processed node icons: always white (graph is always dark theme) */
         .node-si-icon { filter: brightness(0) invert(1); opacity: 0.85; }
+
+        /* Node interactivity */
+        .mermaid svg g.node { cursor: pointer; }
+        .mermaid svg g.node rect { transition: filter 0.15s; }
+        .mermaid svg g.node:hover rect { filter: brightness(1.25); }
     </style>
 </head>
 
@@ -259,76 +264,108 @@
             startOnLoad: false,
             theme: 'dark',
             securityLevel: 'loose',
-            flowchart: { curve: 'basis', useMaxWidth: true, nodeSpacing: 60, rankSpacing: 60 },
+            flowchart: { curve: 'basis', useMaxWidth: true, htmlLabels: true, nodeSpacing: 60, rankSpacing: 60 },
         });
 
         document.addEventListener('DOMContentLoaded', function () {
             mermaid.run({ querySelector: '.mermaid' }).then(function () {
-                postProcessNodes();
+                // Double rAF: wait for browser to paint before we read/write SVG layout.
+                // mermaid.run() resolves when JS finishes, but the DOM may not be painted yet.
+                requestAnimationFrame(function () {
+                    requestAnimationFrame(function () {
+                        postProcessNodes();
+                    });
+                });
             }).catch(function (err) {
                 console.warn('mermaid render error', err);
             });
         });
 
-        // ─── Node post-processing: uniform size, rounded corners, icons ─────
+        // ─── Node post-processing: uniform size, rounded corners, icons, status dot ─
         function postProcessNodes() {
             var svg = document.querySelector('.mermaid svg');
             if (!svg) return;
 
-            var W = 160, H = 56, R = 8, ICON = 18, PAD = 10;
+            var W = 164, H = 58, R = 10, ICON = 16, PAD = 9;
 
-            // Map mermaidID → container data using same transform as Go: - and . → _
+            // Inject CSS into the SVG element for font consistency (survives Mermaid's inline styles)
+            if (!svg.querySelector('style#dag-node-overrides')) {
+                var styleEl = document.createElementNS('http://www.w3.org/2000/svg', 'style');
+                styleEl.id = 'dag-node-overrides';
+                styleEl.textContent =
+                    '.node .label div, .node .label p { font-family: "JetBrains Mono", monospace !important; font-size: 12px !important; font-weight: 500 !important; }' +
+                    '.node .label p { margin: 0; white-space: nowrap; }';
+                svg.insertBefore(styleEl, svg.firstChild);
+            }
+
+            // Map mermaidID → container data (same transform as Go: - and . → _)
             function toMid(name) { return name.replace(/[-\.]/g, '_'); }
             var byMid = {};
             (DATA.containers || []).forEach(function (c) { byMid[toMid(c.name)] = c; });
 
+            // Status fill colors matching the app palette
+            var STATUS_FILL = { running: '#238636', stopped: '#8b949e', starting: '#d29922', failed: '#da3633' };
+
             svg.querySelectorAll('g.node').forEach(function (nodeEl) {
-                // Mermaid v10+/v11 sets id="flowchart-{mermaidId}-{index}"
+                // Mermaid v11 sets id="flowchart-{mermaidId}-{index}"
                 var m = nodeEl.id.match(/^flowchart-([a-zA-Z0-9_]+)-\d+$/);
                 if (!m) return;
                 var mid = m[1];
                 var container = byMid[mid];
-                if (!container) return; // skip subgraph cluster nodes
+                if (!container) return; // skip subgraph cluster wrapper nodes
 
-                // ── Resize the background rect ──
-                var rect = nodeEl.querySelector('rect.label-container, rect.basic, rect');
-                if (rect) {
-                    rect.setAttribute('rx', R);
-                    rect.setAttribute('ry', R);
-                    rect.setAttribute('x', -W / 2);
-                    rect.setAttribute('y', -H / 2);
-                    rect.setAttribute('width', W);
-                    rect.setAttribute('height', H);
-                }
+                // Guard: skip if already processed (reload safety)
+                if (nodeEl.querySelector('.node-si-icon')) return;
 
-                // ── Reposition label to leave room for icon on the left ──
-                var iconOffset = ICON + PAD * 2; // space reserved for icon
+                // ── Background rect: prefer .label-container, then any rect ──────────
+                var rect = nodeEl.querySelector('rect.label-container') || nodeEl.querySelector('rect');
+                if (!rect) return;
+                rect.setAttribute('rx', R);
+                rect.setAttribute('ry', R);
+                rect.setAttribute('x', -(W / 2));
+                rect.setAttribute('y', -(H / 2));
+                rect.setAttribute('width', W);
+                rect.setAttribute('height', H);
+
+                // ── Label: shift right to leave room for icon on the left ───────────
+                var iconSpace = ICON + PAD * 2; // total horizontal space reserved for icon
+                var shift = iconSpace / 2;       // shift label center rightward
                 var labelG = nodeEl.querySelector('g.label');
                 if (labelG) {
-                    // shift label right so icon fits on the left side
-                    labelG.setAttribute('transform', 'translate(' + (iconOffset / 2) + ', 0)');
+                    labelG.setAttribute('transform', 'translate(' + shift + ', 0)');
                     var fo = labelG.querySelector('foreignObject');
                     if (fo) {
-                        var fw = W - iconOffset - PAD;
+                        var fw = W - iconSpace - PAD;
                         fo.setAttribute('width', fw);
                         fo.setAttribute('height', H - 8);
-                        fo.setAttribute('x', -fw / 2);
-                        fo.setAttribute('y', -(H - 8) / 2);
+                        fo.setAttribute('x', -(fw / 2));
+                        fo.setAttribute('y', -((H - 8) / 2));
                     }
                 }
 
-                // ── Inject Simple Icons image on the left ──
+                // ── Simple Icons image on the left ───────────────────────────────────
                 var slug = (container.icon && container.icon.trim()) ? container.icon.trim() : 'docker';
                 var img = document.createElementNS('http://www.w3.org/2000/svg', 'image');
                 img.setAttribute('href', SI_CDN + encodeURIComponent(slug) + '.svg');
-                img.setAttribute('x', -W / 2 + PAD);
-                img.setAttribute('y', -ICON / 2);
+                img.setAttribute('x', -(W / 2) + PAD);
+                img.setAttribute('y', -(ICON / 2));
                 img.setAttribute('width', ICON);
                 img.setAttribute('height', ICON);
                 img.setAttribute('class', 'node-si-icon');
-                // fallback: if icon load fails, inject docker icon silently
                 img.addEventListener('error', function () { this.remove(); });
                 nodeEl.appendChild(img);
+
+                // ── Status dot: bottom-right corner, same colours as dashboard ───────
+                var cls = toDisplayClass(container.status);
+                var dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                dot.setAttribute('cx', W / 2 - 9);
+                dot.setAttribute('cy', H / 2 - 9);
+                dot.setAttribute('r', 4.5);
+                dot.setAttribute('fill', STATUS_FILL[cls] || STATUS_FILL.stopped);
+                dot.setAttribute('stroke', '#161b22');  // card-dark bg — creates a "cut-out" ring
+                dot.setAttribute('stroke-width', '2');
+                dot.setAttribute('class', 'node-status-dot');
+                nodeEl.appendChild(dot);
             });
         }
 
