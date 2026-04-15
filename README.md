@@ -1,6 +1,4 @@
-<p align="center">
-  <img src="docs/assets/images/hero.png" alt="Docker Awakening Gateway" />
-</p>
+# Docker Awakening Gateway
 
 <p align="center">
   <a href="https://github.com/ares-17/docker-gateway/actions/workflows/ci.yml">
@@ -18,7 +16,9 @@
   <img src="https://img.shields.io/badge/go-1.24-00ADD8?logo=go&logoColor=white" alt="Go Version">
 </p>
 
-# Docker Awakening Gateway
+<p align="center">
+  <img src="docs/assets/images/hero.png" alt="Docker Awakening Gateway" />
+</p>
 
 An ultra-lightweight reverse proxy that **wakes up stopped Docker containers on demand**. When a request arrives for a sleeping container, the gateway shows an animated loading page with live logs, starts the container, and transparently proxies once it's ready.
 
