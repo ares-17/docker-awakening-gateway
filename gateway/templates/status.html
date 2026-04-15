@@ -180,33 +180,23 @@
                 </div>
             </div>
 
-            <!-- Summary badges -->
-            <div id="summary-badges"
+            <!-- View switcher (same structure as topology.html) -->
+            <div
                 class="flex items-center gap-2 dark:bg-bg-dark/50 bg-slate-100 p-1.5 rounded-lg dark:border-border-dark border-border-light border overflow-x-auto max-w-full">
                 <div
-                    class="flex items-center gap-2 px-3 py-1 rounded dark:bg-card-dark bg-white dark:border-border-dark border-border-light border min-w-fit">
-                    <span class="w-2 h-2 rounded-full bg-slate-400"></span>
-                    <span id="badge-total" class="text-xs font-bold dark:text-white text-slate-800 font-mono">0
-                        Total</span>
+                    class="flex items-center gap-2 px-3 py-1 rounded bg-primary/10 dark:border-primary/30 border-primary/40 border min-w-fit">
+                    <span class="w-2 h-2 rounded-full bg-primary flex-shrink-0 animate-pulse-dot"></span>
+                    <span class="text-xs font-bold text-primary font-mono">Status Dashboard</span>
                 </div>
-                <div
-                    class="flex items-center gap-2 px-3 py-1 rounded dark:bg-card-dark bg-white dark:border-border-dark border-border-light border min-w-fit">
-                    <span class="w-2 h-2 rounded-full bg-status-running"></span>
-                    <span id="badge-running" class="text-xs font-bold text-status-running font-mono">0 Running</span>
-                </div>
-                <div
-                    class="flex items-center gap-2 px-3 py-1 rounded dark:bg-card-dark bg-white dark:border-border-dark border-border-light border min-w-fit">
-                    <span class="w-2 h-2 rounded-full bg-status-stopped"></span>
-                    <span id="badge-stopped" class="text-xs font-bold text-status-stopped font-mono">0 Stopped</span>
-                </div>
+                <a href="/_topology"
+                    class="flex items-center gap-2 px-3 py-1 rounded dark:bg-card-dark bg-white dark:border-border-dark border-border-light border min-w-fit dark:text-slate-400 text-slate-600 dark:hover:text-white hover:text-slate-900 transition-colors">
+                    <span class="w-2 h-2 rounded-full bg-slate-400 flex-shrink-0"></span>
+                    <span class="text-xs font-bold font-mono">Topology View</span>
+                </a>
             </div>
 
-            <!-- Actions -->
+            <!-- Actions (same structure as topology.html) -->
             <div class="flex items-center gap-3">
-                <div class="hidden lg:flex flex-col items-end text-xs dark:text-slate-500 text-slate-400 font-mono">
-                    <span>Last Updated</span>
-                    <span id="last-updated" class="dark:text-slate-300 text-slate-600">--:--:--</span>
-                </div>
                 <button id="btn-refresh" onclick="fetchStatus()"
                     class="p-2 rounded-lg dark:hover:bg-border-dark hover:bg-slate-200 dark:text-slate-400 text-slate-500 hover:text-primary transition-colors"
                     title="Refresh now">
@@ -233,6 +223,25 @@
     <!-- ─── Main content ────────────────────────────────────────────────── -->
     <main class="flex-grow p-4 sm:p-6">
         <div class="max-w-7xl mx-auto">
+            <!-- Stats bar (badges moved here from header) -->
+            <div id="summary-badges" class="flex flex-wrap items-center gap-3 mb-6">
+                <div class="flex items-center gap-2 px-3 py-1.5 rounded-lg dark:bg-card-dark bg-white border dark:border-border-dark border-slate-200">
+                    <span class="w-2 h-2 rounded-full bg-slate-400"></span>
+                    <span id="badge-total" class="text-xs font-bold dark:text-white text-slate-800 font-mono">0 Total</span>
+                </div>
+                <div class="flex items-center gap-2 px-3 py-1.5 rounded-lg dark:bg-card-dark bg-white border dark:border-border-dark border-slate-200">
+                    <span class="w-2 h-2 rounded-full bg-status-running"></span>
+                    <span id="badge-running" class="text-xs font-bold text-status-running font-mono">0 Running</span>
+                </div>
+                <div class="flex items-center gap-2 px-3 py-1.5 rounded-lg dark:bg-card-dark bg-white border dark:border-border-dark border-slate-200">
+                    <span class="w-2 h-2 rounded-full bg-status-stopped"></span>
+                    <span id="badge-stopped" class="text-xs font-bold text-status-stopped font-mono">0 Stopped</span>
+                </div>
+                <div class="hidden lg:flex items-center gap-1.5 ml-auto text-xs dark:text-slate-500 text-slate-400 font-mono">
+                    <span>Last updated:</span>
+                    <span id="last-updated" class="dark:text-slate-300 text-slate-600">--:--:--</span>
+                </div>
+            </div>
             <div id="container-grid" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
                 <!-- Cards rendered by JS -->
             </div>
