@@ -86,8 +86,6 @@ func (s *Server) Start(ctx context.Context) error {
 		promhttp.Handler(), authCfg))
 	mux.Handle("/_topology", adminAuthMiddleware(
 		http.HandlerFunc(s.handleTopology), authCfg))
-	mux.Handle("/_topology/svg", adminAuthMiddleware(
-		http.HandlerFunc(s.handleTopologySVG), authCfg))
 
 	// ── Catch-all ──
 	mux.HandleFunc("/", s.handleRequest)
@@ -735,13 +733,6 @@ type statusAPIResponse struct {
 // ─── Topology page types ──────────────────────────────────────────────────────
 
 type topologyData struct {
-	Version      string
-	MermaidGraph template.HTML // Go-generated Mermaid source — not user input
-	NodeMapJSON  template.JS   // JSON: {"mermaidID": "containerName", ...}
-	DataJSON     template.JS   // JSON: topologyPayload
-}
-
-type topologySVGData struct {
 	DataJSON template.JS // JSON: topologyPayload
 }
 
@@ -968,19 +959,17 @@ func (s *Server) handleStatusWake(w http.ResponseWriter, r *http.Request) {
 
 // ─── Topology page handler ────────────────────────────────────────────────────
 
-// handleTopology serves the container dependency graph page.
+// handleTopology serves the container dependency graph page (SVG rendering).
 func (s *Server) handleTopology(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	cfg := s.GetConfig()
 
-	// Collect live Docker status for every container (one inspect per container).
 	type dockerInfo struct {
 		status    string
 		image     string
 		startedAt *string
 	}
 	infoMap := make(map[string]dockerInfo, len(cfg.Containers))
-	statusMap := make(map[string]string, len(cfg.Containers))
 	for i := range cfg.Containers {
 		name := cfg.Containers[i].Name
 		di := dockerInfo{status: "unknown"}
@@ -993,19 +982,8 @@ func (s *Server) handleTopology(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		infoMap[name] = di
-		statusMap[name] = di.status
 	}
 
-	// Build Mermaid graph string from pure functions.
-	graphStr := buildMermaidGraph(cfg.Containers, cfg.Groups, statusMap)
-
-	// JS reverse-lookup map: mermaidID → containerName.
-	nodeMap := make(map[string]string, len(cfg.Containers))
-	for _, c := range cfg.Containers {
-		nodeMap[mermaidID(c.Name)] = c.Name
-	}
-
-	// JSON payload for the click detail panel.
 	payload := topologyPayload{
 		Containers: make([]topologyContainerJSON, 0, len(cfg.Containers)),
 		Groups:     make([]topologyGroupJSON, 0, len(cfg.Groups)),
@@ -1041,12 +1019,6 @@ func (s *Server) handleTopology(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	nodeMapBytes, err := json.Marshal(nodeMap)
-	if err != nil {
-		slog.Error("topology: marshal nodeMap", "error", err)
-		http.Error(w, "internal error", http.StatusInternalServerError)
-		return
-	}
 	payloadBytes, err := json.Marshal(payload)
 	if err != nil {
 		slog.Error("topology: marshal payload", "error", err)
@@ -1054,89 +1026,9 @@ func (s *Server) handleTopology(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	data := topologyData{
-		Version:      gatewayVersion,
-		MermaidGraph: template.HTML(graphStr),
-		NodeMapJSON:  template.JS(nodeMapBytes),
-		DataJSON:     template.JS(payloadBytes),
-	}
-
+	data := topologyData{DataJSON: template.JS(payloadBytes)}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := s.tmpl.ExecuteTemplate(w, "topology.html", data); err != nil {
 		slog.Error("template render failed", "template", "topology", "error", err)
-	}
-}
-
-// handleTopologySVG serves the container dependency graph page rendered via pure SVG.
-func (s *Server) handleTopologySVG(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-	cfg := s.GetConfig()
-
-	type dockerInfo struct {
-		status    string
-		image     string
-		startedAt *string
-	}
-	infoMap := make(map[string]dockerInfo, len(cfg.Containers))
-	for i := range cfg.Containers {
-		name := cfg.Containers[i].Name
-		di := dockerInfo{status: "unknown"}
-		if info, err := s.manager.client.InspectContainer(ctx, name); err == nil {
-			di.status = info.Status
-			di.image = info.Image
-			if !info.StartedAt.IsZero() {
-				ts := info.StartedAt.UTC().Format(time.RFC3339)
-				di.startedAt = &ts
-			}
-		}
-		infoMap[name] = di
-	}
-
-	payload := topologyPayload{
-		Containers: make([]topologyContainerJSON, 0, len(cfg.Containers)),
-		Groups:     make([]topologyGroupJSON, 0, len(cfg.Groups)),
-	}
-	for i := range cfg.Containers {
-		c := &cfg.Containers[i]
-		di := infoMap[c.Name]
-		entry := topologyContainerJSON{
-			Name:          c.Name,
-			Host:          c.Host,
-			Icon:          c.Icon,
-			TargetPort:    c.TargetPort,
-			HealthPath:    c.HealthPath,
-			DependsOn:     c.DependsOn,
-			IdleTimeout:   c.IdleTimeout.String(),
-			ScheduleStart: c.ScheduleStart,
-			ScheduleStop:  c.ScheduleStop,
-			Status:        di.status,
-			Image:         di.image,
-			StartedAt:     di.startedAt,
-		}
-		if t, ok := s.manager.GetLastSeen(c.Name); ok {
-			ts := t.UTC().Format(time.RFC3339)
-			entry.LastRequest = &ts
-		}
-		payload.Containers = append(payload.Containers, entry)
-	}
-	for _, g := range cfg.Groups {
-		payload.Groups = append(payload.Groups, topologyGroupJSON{
-			Name:       g.Name,
-			Host:       g.Host,
-			Containers: g.Containers,
-		})
-	}
-
-	payloadBytes, err := json.Marshal(payload)
-	if err != nil {
-		slog.Error("topology-svg: marshal payload", "error", err)
-		http.Error(w, "internal error", http.StatusInternalServerError)
-		return
-	}
-
-	data := topologySVGData{DataJSON: template.JS(payloadBytes)}
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := s.tmpl.ExecuteTemplate(w, "topology_svg.html", data); err != nil {
-		slog.Error("template render failed", "template", "topology_svg", "error", err)
 	}
 }

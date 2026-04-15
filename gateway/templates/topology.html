@@ -4,7 +4,7 @@
 <head>
     <meta charset="utf-8" />
     <meta content="width=device-width, initial-scale=1.0" name="viewport" />
-    <title>Docker Awakening Gateway — Topology View</title>
+    <title>Docker Awakening Gateway — Topology</title>
     <link href="https://fonts.googleapis.com" rel="preconnect" />
     <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect" />
     <link
@@ -38,7 +38,6 @@
             },
         }
     </script>
-    <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
     <style>
         @keyframes pulse-dot {
             0%, 100% { opacity: 1; }
@@ -51,28 +50,21 @@
         .dark ::-webkit-scrollbar-track { background: transparent; }
         .dark ::-webkit-scrollbar-thumb { background: #30363d; border-radius: 2px; }
 
-        /* Simple Icons in dark mode */
+        /* Simple Icons: dark on light, white on dark */
         .dark .si-icon { filter: brightness(0) invert(1); }
         .si-icon { filter: brightness(0); }
 
-        /* Mermaid SVG fills available space */
-        #graph-container .mermaid { display: flex; justify-content: center; }
-        #graph-container .mermaid svg { max-width: 100%; height: auto; }
-
-        /* Post-processed node icons: always white (graph is always dark theme) */
-        .node-si-icon { filter: brightness(0) invert(1); opacity: 0.85; }
-
-        /* Node interactivity + rounded corners (rx/ry as CSS props, Chrome 88+, FF 64+, Safari 13.1+) */
-        .mermaid svg g.node { cursor: pointer; }
-        .mermaid svg g.node rect { rx: 10px; ry: 10px; transition: filter 0.15s; }
-        .mermaid svg g.node:hover rect { filter: brightness(1.25); }
+        /* SVG graph nodes */
+        .sv-node { cursor: pointer; }
+        .sv-node .node-bg { transition: filter 0.15s ease; }
+        .sv-node:hover .node-bg { filter: brightness(1.25); }
     </style>
 </head>
 
 <body
     class="dark:bg-bg-dark bg-bg-light dark:text-slate-300 text-slate-700 font-display min-h-screen flex flex-col transition-colors duration-200">
 
-    <!-- ─── Inline SVG definitions (identical to status.html) ────────────── -->
+    <!-- ─── Inline SVG symbol definitions ───────────────────────────────── -->
     <svg xmlns="http://www.w3.org/2000/svg" class="hidden">
         <symbol id="icon-container" viewBox="0 -960 960 960">
             <path d="M440-183v-274L200-596v274l240 139Zm80 0 240-139v-274L520-457v274Zm-40-343 237-137-237-137-237 137 237 137ZM160-252q-19-11-29.5-29T120-321v-318q0-22 10.5-40t29.5-29l280-161q19-11 40-11t40 11l280 161q19 11 29.5 29t10.5 40v318q0 22-10.5 40T800-252L520-91q-19 11-40 11t-40-11L160-252Z" />
@@ -88,19 +80,12 @@
         </symbol>
     </svg>
 
-    <!-- Fallback Docker SVG (used when Simple Icons fails to load) -->
-    <template id="fallback-docker-svg">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="w-5 h-5 si-icon">
-            <path d="M13.983 11.078h2.119a.186.186 0 00.186-.185V9.006a.186.186 0 00-.186-.186h-2.119a.186.186 0 00-.185.185v1.888c0 .102.083.185.185.185m-2.954-5.43h2.118a.186.186 0 00.186-.186V3.574a.186.186 0 00-.186-.185h-2.118a.186.186 0 00-.185.185v1.888c0 .102.082.185.185.186m0 2.716h2.118a.187.187 0 00.186-.186V6.29a.186.186 0 00-.186-.185h-2.118a.186.186 0 00-.185.185v1.887c0 .102.082.185.185.186m-2.93 0h2.12a.186.186 0 00.184-.186V6.29a.185.185 0 00-.185-.185H8.1a.186.186 0 00-.185.185v1.887c0 .102.083.186.185.186m-2.964 0h2.119a.186.186 0 00.185-.186V6.29a.186.186 0 00-.185-.185H5.136a.186.186 0 00-.186.185v1.887c0 .102.084.186.186.186m5.893 2.715h2.118a.186.186 0 00.186-.185V9.006a.186.186 0 00-.186-.186h-2.118a.185.185 0 00-.185.185v1.888c0 .102.082.185.185.185m-2.93 0h2.12a.185.185 0 00.184-.185V9.006a.185.185 0 00-.184-.186h-2.12a.185.185 0 00-.184.185v1.888c0 .102.083.185.185.185m-2.964 0h2.119a.186.186 0 00.185-.185V9.006a.186.186 0 00-.185-.186H5.136a.186.186 0 00-.186.185v1.888c0 .102.084.185.186.185m-2.92 0h2.12a.185.185 0 00.184-.185V9.006a.185.185 0 00-.184-.186h-2.12a.186.186 0 00-.186.186v1.887c0 .102.084.185.186.185M23.763 9.89c-.065-.051-.672-.51-1.954-.51-.338.001-.676.03-1.01.087-.248-1.7-1.653-2.53-1.716-2.566l-.344-.199-.226.327c-.284.438-.49.922-.612 1.43-.23.97-.09 1.882.403 2.661-.595.332-1.55.413-1.744.42H.751a.751.751 0 00-.75.748 11.376 11.376 0 00.692 4.062c.545 1.428 1.355 2.48 2.41 3.124 1.18.723 3.1 1.137 5.275 1.137.983.003 1.963-.086 2.93-.266a12.248 12.248 0 003.823-1.389c.98-.567 1.86-1.288 2.61-2.136 1.252-1.418 1.998-2.997 2.553-4.4h.221c1.372 0 2.215-.549 2.68-1.009.309-.293.55-.65.707-1.046l.098-.288Z" />
-        </svg>
-    </template>
-
-    <!-- ─── Header (same structure as status.html) ───────────────────────── -->
+    <!-- ─── Header ───────────────────────────────────────────────────────── -->
     <header
         class="border-b dark:border-border-dark border-slate-200 dark:bg-card-dark bg-white px-4 sm:px-6 py-4 sticky top-0 z-50 transition-colors duration-200 shadow-[0_1px_3px_rgba(0,0,0,0.05)] dark:shadow-none">
         <div class="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
 
-            <!-- Logo + title (identical to status.html) -->
+            <!-- Logo + title -->
             <div class="flex items-center gap-3">
                 <div class="bg-primary/20 p-2 rounded-lg text-primary">
                     <svg class="w-6 h-6" fill="currentColor">
@@ -109,13 +94,12 @@
                 </div>
                 <div>
                     <h1 class="dark:text-white text-slate-900 text-xl font-bold tracking-tight">Docker Awakening
-                        Gateway
-                    </h1>
-                    <p class="text-xs dark:text-slate-500 text-slate-400 font-mono">v{{ .Version }} • /_topology</p>
+                        Gateway</h1>
+                    <p class="text-xs dark:text-slate-500 text-slate-400 font-mono">/_topology</p>
                 </div>
             </div>
 
-            <!-- View switcher (replaces summary badges, same visual style) -->
+            <!-- View switcher -->
             <div
                 class="flex items-center gap-2 dark:bg-bg-dark/50 bg-slate-100 p-1.5 rounded-lg dark:border-border-dark border-border-light border overflow-x-auto max-w-full">
                 <a href="/_status"
@@ -126,20 +110,15 @@
                 <div
                     class="flex items-center gap-2 px-3 py-1 rounded bg-primary/10 dark:border-primary/30 border-primary/40 border min-w-fit">
                     <span class="w-2 h-2 rounded-full bg-primary flex-shrink-0 animate-pulse-dot"></span>
-                    <span class="text-xs font-bold text-primary font-mono">Topology — Mermaid</span>
+                    <span class="text-xs font-bold text-primary font-mono">Topology View</span>
                 </div>
-                <a href="/_topology/svg"
-                    class="flex items-center gap-2 px-3 py-1 rounded dark:bg-card-dark bg-white dark:border-border-dark border-border-light border min-w-fit dark:text-slate-400 text-slate-600 dark:hover:text-white hover:text-slate-900 transition-colors">
-                    <span class="w-2 h-2 rounded-full bg-slate-400 flex-shrink-0"></span>
-                    <span class="text-xs font-bold font-mono">Topology — SVG</span>
-                </a>
             </div>
 
-            <!-- Actions (same structure as status.html) -->
+            <!-- Actions -->
             <div class="flex items-center gap-3">
                 <button onclick="window.location.reload()"
                     class="p-2 rounded-lg dark:hover:bg-border-dark hover:bg-slate-200 dark:text-slate-400 text-slate-500 hover:text-primary transition-colors"
-                    title="Reload topology">
+                    title="Reload">
                     <svg class="w-5 h-5" fill="currentColor">
                         <use href="#icon-reload" />
                     </svg>
@@ -162,14 +141,13 @@
 
     <!-- ─── Main ─────────────────────────────────────────────────────────── -->
     <main class="flex-grow flex flex-col p-4 sm:p-6 min-h-0">
-        <div id="graph-container"
-            class="flex-grow dark:bg-card-dark bg-white rounded-xl border dark:border-border-dark border-slate-200 p-6 overflow-auto">
-            <div class="mermaid">{{.MermaidGraph}}</div>
+        <div id="graph-wrap"
+            class="flex-grow dark:bg-card-dark bg-white rounded-xl border dark:border-border-dark border-slate-200 overflow-auto p-6">
+            <svg id="graph-svg" width="100%" style="min-height:300px;display:block;"></svg>
         </div>
 
         <!-- Legend -->
-        <div
-            class="mt-3 flex flex-wrap items-center gap-4 text-xs font-mono dark:text-slate-400 text-slate-500">
+        <div class="mt-3 flex flex-wrap items-center gap-4 text-xs font-mono dark:text-slate-400 text-slate-500">
             <span class="flex items-center gap-1.5">
                 <span class="w-3 h-3 rounded-full" style="background:#238636"></span>Running
             </span>
@@ -197,7 +175,6 @@
             <div class="flex items-center gap-3 min-w-0">
                 <div id="panel-icon-wrap"
                     class="w-8 h-8 rounded-lg dark:bg-primary/10 bg-blue-50 flex items-center justify-center dark:border-primary/20 border-blue-200 border flex-shrink-0">
-                    <!-- img and fallback are both persistent — toggled via display, never innerHTML-replaced -->
                     <img id="panel-icon" src="" alt="" class="w-4 h-4 si-icon" style="display:none" />
                     <svg id="panel-icon-fallback" class="w-4 h-4 si-icon" fill="currentColor" viewBox="0 -960 960 960">
                         <use href="#icon-container" />
@@ -262,134 +239,259 @@
 
     <!-- ─── Scripts ──────────────────────────────────────────────────────── -->
     <script>
-        const NODE_MAP = {{.NodeMapJSON}};
-        const DATA     = {{.DataJSON}};
+        var DATA    = {{.DataJSON}};
+        var SI_CDN  = 'https://cdn.jsdelivr.net/npm/simple-icons@14/icons/';
 
-        const SI_CDN = 'https://cdn.jsdelivr.net/npm/simple-icons@14/icons/';
+        // ─── Layout constants ────────────────────────────────────────────
+        var NODE_W = 164, NODE_H = 52, H_GAP = 100, V_GAP = 20, PAD = 40;
 
-        // ─── Mermaid init (manual run so we can post-process after render) ───
-        mermaid.initialize({
-            startOnLoad: false,
-            theme: 'dark',
-            securityLevel: 'loose',
-            flowchart: { curve: 'basis', useMaxWidth: true, htmlLabels: true, nodeSpacing: 60, rankSpacing: 60 },
-        });
+        // Status styles (dark-theme colours, consistent with status.html and topology.html)
+        var STATUS_STYLE = {
+            running:  { fill: '#1a4731', stroke: '#238636', bar: '#238636', dot: '#238636' },
+            stopped:  { fill: '#21262d', stroke: '#30363d', bar: '#8b949e', dot: '#8b949e' },
+            starting: { fill: '#3d2e0a', stroke: '#d29922', bar: '#e3b341', dot: '#d29922' },
+            failed:   { fill: '#3b1219', stroke: '#da3633', bar: '#f85149', dot: '#da3633' },
+        };
+        var DEFAULT_STYLE = STATUS_STYLE.stopped;
 
-        document.addEventListener('DOMContentLoaded', function () {
-            mermaid.run({ querySelector: '.mermaid' }).then(function () {
-                // Double rAF: wait for browser to paint before we read/write SVG layout.
-                // mermaid.run() resolves when JS finishes, but the DOM may not be painted yet.
-                requestAnimationFrame(function () {
-                    requestAnimationFrame(function () {
-                        postProcessNodes();
+        function toDisplayClass(s) {
+            if (s === 'running')                      return 'running';
+            if (s === 'restarting')                   return 'starting';
+            if (s === 'dead' || s === 'removing')     return 'failed';
+            return 'stopped';
+        }
+
+        function getStyle(status) {
+            return STATUS_STYLE[toDisplayClass(status)] || DEFAULT_STYLE;
+        }
+
+        // SVG element factory
+        function svgEl(tag, attrs) {
+            var el = document.createElementNS('http://www.w3.org/2000/svg', tag);
+            if (attrs) {
+                Object.keys(attrs).forEach(function (k) {
+                    el.setAttribute(k, attrs[k]);
+                });
+            }
+            return el;
+        }
+
+        // ─── Layer assignment (longest-path from sources) ─────────────────
+        // Edge direction: a.depends_on contains b → a is "upstream" (left), b is "downstream" (right).
+        // layer[b] = max(layer[b], layer[a] + 1)
+        function assignLayers(containers) {
+            var layer = {};
+            containers.forEach(function (c) { layer[c.name] = 0; });
+
+            var changed = true;
+            var maxIter = containers.length + 2;
+            while (changed && maxIter-- > 0) {
+                changed = false;
+                containers.forEach(function (c) {
+                    (c.depends_on || []).forEach(function (dep) {
+                        if (layer[dep] !== undefined && layer[dep] < layer[c.name] + 1) {
+                            layer[dep] = layer[c.name] + 1;
+                            changed = true;
+                        }
                     });
                 });
-            }).catch(function (err) {
-                console.warn('mermaid render error', err);
+            }
+            return layer;
+        }
+
+        // ─── Compute node positions ───────────────────────────────────────
+        function computeLayout(containers) {
+            var layer = assignLayers(containers);
+
+            // Group names by layer
+            var byLayer = {};
+            containers.forEach(function (c) {
+                var l = layer[c.name];
+                if (!byLayer[l]) byLayer[l] = [];
+                byLayer[l].push(c.name);
             });
-        });
 
-        // ─── Node post-processing: uniform size, rounded corners, icons, status dot ─
-        function postProcessNodes() {
-            var svg = document.querySelector('.mermaid svg');
-            if (!svg) return;
+            var layerNums = Object.keys(byLayer).map(Number);
+            var numLayers = Math.max.apply(null, layerNums) + 1;
+            var maxNodes  = Math.max.apply(null, Object.values(byLayer).map(function (a) { return a.length; }));
 
-            var W = 164, H = 58, R = 10, ICON = 16, PAD = 9;
+            var totalW = numLayers * (NODE_W + H_GAP) - H_GAP + PAD * 2;
+            var totalH = maxNodes  * (NODE_H + V_GAP) - V_GAP + PAD * 2;
 
-            // Inject CSS into the SVG element for font consistency (survives Mermaid's inline styles)
-            if (!svg.querySelector('style#dag-node-overrides')) {
-                var styleEl = document.createElementNS('http://www.w3.org/2000/svg', 'style');
-                styleEl.id = 'dag-node-overrides';
-                styleEl.textContent =
-                    '.node .label div, .node .label p { font-family: "JetBrains Mono", monospace !important; font-size: 12px !important; font-weight: 500 !important; }' +
-                    '.node .label p { margin: 0; white-space: nowrap; }';
-                svg.insertBefore(styleEl, svg.firstChild);
+            var pos = {};
+            Object.keys(byLayer).forEach(function (l) {
+                var names   = byLayer[l];
+                var groupH  = names.length * (NODE_H + V_GAP) - V_GAP;
+                var startY  = (totalH - groupH) / 2;
+                names.forEach(function (name, i) {
+                    pos[name] = {
+                        x: PAD + parseInt(l, 10) * (NODE_W + H_GAP),
+                        y: startY + i * (NODE_H + V_GAP),
+                    };
+                });
+            });
+
+            return { pos: pos, totalW: totalW, totalH: totalH };
+        }
+
+        // ─── Main render function ─────────────────────────────────────────
+        function renderGraph() {
+            var svg        = document.getElementById('graph-svg');
+            var containers = DATA.containers || [];
+            var groups     = DATA.groups     || [];
+
+            if (!containers.length) {
+                svg.setAttribute('viewBox', '0 0 400 120');
+                svg.setAttribute('width', '400');
+                svg.setAttribute('height', '120');
+                var txt = svgEl('text', {
+                    x: '200', y: '60', 'text-anchor': 'middle',
+                    fill: '#8b949e', 'font-family': 'JetBrains Mono, monospace', 'font-size': '13',
+                });
+                txt.textContent = 'No containers configured';
+                svg.appendChild(txt);
+                return;
             }
 
-            // Map mermaidID → container data (same transform as Go: - and . → _)
-            function toMid(name) { return name.replace(/[-\.]/g, '_'); }
-            var byMid = {};
-            (DATA.containers || []).forEach(function (c) { byMid[toMid(c.name)] = c; });
+            var layout = computeLayout(containers);
+            var pos    = layout.pos;
+            var W      = layout.totalW;
+            var H      = layout.totalH;
 
-            // Status fill colors matching the app palette
-            var STATUS_FILL = { running: '#238636', stopped: '#8b949e', starting: '#d29922', failed: '#da3633' };
+            // Container name → data lookup
+            var byName = {};
+            containers.forEach(function (c) { byName[c.name] = c; });
 
-            svg.querySelectorAll('g.node').forEach(function (nodeEl) {
-                // Mermaid v11 sets id="flowchart-{mermaidId}-{index}"
-                var m = nodeEl.id.match(/^flowchart-([a-zA-Z0-9_]+)-\d+$/);
-                if (!m) return;
-                var mid = m[1];
-                var container = byMid[mid];
-                if (!container) return; // skip subgraph cluster wrapper nodes
+            // ── Defs: arrow marker ────────────────────────────────────────
+            var defs   = svgEl('defs');
+            var marker = svgEl('marker', {
+                id: 'sv-arrow', markerWidth: '10', markerHeight: '7',
+                refX: '9', refY: '3.5', orient: 'auto',
+            });
+            marker.appendChild(svgEl('path', { d: 'M0,0 L0,7 L10,3.5 z', fill: '#4d5562' }));
+            defs.appendChild(marker);
+            svg.appendChild(defs);
 
-                // Guard: skip if already processed (reload safety)
-                if (nodeEl.querySelector('.node-si-icon')) return;
+            // ── Group backgrounds (drawn behind edges and nodes) ──────────
+            var GPAD = 16;
+            groups.forEach(function (g) {
+                var members = (g.containers || []).filter(function (n) { return pos[n]; });
+                if (!members.length) return;
 
-                // ── Background rect: class "basic label-container" in Mermaid v11 ───
-                // Use direct child rect to avoid selecting the empty <rect> inside g.label
-                var rect = nodeEl.querySelector(':scope > rect') ||
-                           nodeEl.querySelector('rect.label-container') ||
-                           nodeEl.querySelector('rect');
-                if (!rect) return;
-                rect.setAttribute('rx', R);
-                rect.setAttribute('ry', R);
-                rect.setAttribute('x', -(W / 2));
-                rect.setAttribute('y', -(H / 2));
-                rect.setAttribute('width', W);
-                rect.setAttribute('height', H);
+                var xs = members.map(function (n) { return pos[n].x; });
+                var ys = members.map(function (n) { return pos[n].y; });
+                var gx = Math.min.apply(null, xs) - GPAD;
+                var gy = Math.min.apply(null, ys) - GPAD;
+                var gw = Math.max.apply(null, xs) + NODE_W + GPAD - gx;
+                var gh = Math.max.apply(null, ys) + NODE_H + GPAD - gy;
 
-                // ── Label: shift right, preserve original Y from Mermaid's transform ─
-                var iconSpace = ICON + PAD * 2; // total horizontal space reserved for icon
-                var shift = iconSpace / 2;       // shift label center rightward by this amount
-                var labelG = nodeEl.querySelector('g.label');
-                if (labelG) {
-                    // Preserve the Y offset Mermaid set (e.g. -12 for vertical centering)
-                    var origTransform = labelG.getAttribute('transform') || '';
-                    var yMatch = origTransform.match(/translate\s*\([^,]+,\s*([^)]+)\)/);
-                    var origY = yMatch ? parseFloat(yMatch[1]) : 0;
-                    labelG.setAttribute('transform', 'translate(' + shift + ', ' + origY + ')');
+                svg.appendChild(svgEl('rect', {
+                    x: gx, y: gy, width: gw, height: gh, rx: '12',
+                    fill: 'rgba(43,117,238,0.05)',
+                    stroke: 'rgba(43,117,238,0.25)', 'stroke-width': '1',
+                    'stroke-dasharray': '5 3',
+                }));
 
-                    // Update foreignObject to fill the remaining width correctly
-                    var fo = labelG.querySelector('foreignObject');
-                    if (fo) {
-                        var fw = W - iconSpace - PAD;
-                        fo.setAttribute('width', fw);
-                        fo.setAttribute('height', H - 8);
-                        fo.setAttribute('x', -(fw / 2));
-                        fo.setAttribute('y', -((H - 8) / 2));
-                    }
-                }
+                var lbl = svgEl('text', {
+                    x: gx + 10, y: gy + 14,
+                    'font-family': 'JetBrains Mono, monospace', 'font-size': '10', 'font-weight': '600',
+                    fill: 'rgba(43,117,238,0.7)', 'letter-spacing': '0.08em',
+                });
+                lbl.textContent = g.name.toUpperCase();
+                svg.appendChild(lbl);
+            });
 
-                // ── Simple Icons image on the left ───────────────────────────────────
-                var slug = (container.icon && container.icon.trim()) ? container.icon.trim() : 'docker';
-                var img = document.createElementNS('http://www.w3.org/2000/svg', 'image');
-                img.setAttribute('href', SI_CDN + encodeURIComponent(slug) + '.svg');
-                img.setAttribute('x', -(W / 2) + PAD);
-                img.setAttribute('y', -(ICON / 2));
-                img.setAttribute('width', ICON);
-                img.setAttribute('height', ICON);
-                img.setAttribute('class', 'node-si-icon');
-                img.addEventListener('error', function () { this.remove(); });
-                // Insert before g.label so icon sits behind the text
-                var labelRef = nodeEl.querySelector('g.label');
-                if (labelRef) { nodeEl.insertBefore(img, labelRef); }
-                else { nodeEl.appendChild(img); }
+            // ── Edges (drawn before nodes so nodes appear on top) ─────────
+            containers.forEach(function (c) {
+                if (!pos[c.name]) return;
+                var src = pos[c.name];
+                (c.depends_on || []).forEach(function (dep) {
+                    if (!pos[dep]) return;
+                    var tgt = pos[dep];
+                    var sx  = src.x + NODE_W,  sy = src.y + NODE_H / 2;
+                    var tx  = tgt.x,           ty = tgt.y + NODE_H / 2;
+                    var cp  = Math.max(H_GAP * 0.45, 36);
 
-                // ── Status dot: bottom-right corner, same colours as dashboard ───────
-                var cls = toDisplayClass(container.status);
-                var dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-                dot.setAttribute('cx', W / 2 - 9);
-                dot.setAttribute('cy', H / 2 - 9);
-                dot.setAttribute('r', 4.5);
-                dot.setAttribute('fill', STATUS_FILL[cls] || STATUS_FILL.stopped);
-                dot.setAttribute('stroke', '#161b22');  // card-dark bg — creates a "cut-out" ring
-                dot.setAttribute('stroke-width', '2');
-                dot.setAttribute('class', 'node-status-dot');
-                nodeEl.appendChild(dot);
+                    svg.appendChild(svgEl('path', {
+                        d: 'M ' + sx + ' ' + sy +
+                           ' C ' + (sx + cp) + ' ' + sy +
+                           ' ' + (tx - cp) + ' ' + ty +
+                           ' ' + tx + ' ' + ty,
+                        fill: 'none', stroke: '#4d5562', 'stroke-width': '1.5',
+                        'marker-end': 'url(#sv-arrow)',
+                    }));
+                });
+            });
+
+            // ── Nodes ─────────────────────────────────────────────────────
+            containers.forEach(function (c) {
+                if (!pos[c.name]) return;
+                var x  = pos[c.name].x;
+                var y  = pos[c.name].y;
+                var st = getStyle(c.status);
+
+                var g = svgEl('g', { class: 'sv-node', 'data-name': c.name });
+
+                // Background rect
+                g.appendChild(svgEl('rect', {
+                    class: 'node-bg',
+                    x: x, y: y, width: NODE_W, height: NODE_H, rx: '8',
+                    fill: st.fill, stroke: st.stroke, 'stroke-width': '1.5',
+                }));
+
+                // Left accent bar (status colour strip)
+                g.appendChild(svgEl('rect', {
+                    x: x + 1.5, y: y + 6, width: '3', height: NODE_H - 12, rx: '1.5',
+                    fill: st.bar,
+                }));
+
+                // Simple Icon — always rendered (fallback: hidden on error)
+                var slug = (c.icon && c.icon.trim()) ? c.icon.trim() : 'docker';
+                var iconSize = 18, iconX = x + 12, iconY = y + (NODE_H - iconSize) / 2;
+                var img = svgEl('image', {
+                    href:   SI_CDN + encodeURIComponent(slug) + '.svg',
+                    x:      iconX, y: iconY,
+                    width:  iconSize, height: iconSize,
+                    style:  'filter: brightness(0) invert(1); opacity: 0.8;',
+                });
+                img.addEventListener('error', function () { this.style.display = 'none'; });
+                g.appendChild(img);
+
+                // Name text — truncated if needed
+                var textX   = x + 12 + iconSize + 8; // left pad + icon + gap
+                var maxW    = NODE_W - (12 + iconSize + 8) - 10; // available px
+                var maxChar = Math.floor(maxW / 7.3);             // ~7.3px per char at 12px mono
+                var label   = c.name.length > maxChar ? c.name.slice(0, maxChar - 1) + '\u2026' : c.name;
+                var txt = svgEl('text', {
+                    x:                  textX,
+                    y:                  y + NODE_H / 2,
+                    'font-family':      'JetBrains Mono, monospace',
+                    'font-size':        '12',
+                    'font-weight':      '500',
+                    fill:               '#e6edf3',
+                    'dominant-baseline': 'central',
+                });
+                txt.textContent = label;
+                g.appendChild(txt);
+
+                svg.appendChild(g);
+            });
+
+            // ── Set final SVG dimensions ──────────────────────────────────
+            svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
+            svg.setAttribute('width',   W);
+            svg.setAttribute('height',  H);
+            svg.style.minHeight = '';
+
+            // ── Click: open detail panel ──────────────────────────────────
+            svg.addEventListener('click', function (e) {
+                var node = e.target.closest('.sv-node');
+                if (!node) return;
+                openPanel(node.dataset.name);
             });
         }
 
-        // ─── Theme toggle (same as status.html) ─────────────────────────────
+        // ─── Theme toggle ─────────────────────────────────────────────────
         function toggleTheme() {
             var dark = document.documentElement.classList.toggle('dark');
             localStorage.setItem('dag-theme', dark ? 'dark' : 'light');
@@ -405,68 +507,61 @@
             }
         })();
 
-        // ─── Detail panel ────────────────────────────────────────────────────
+        // ─── Detail panel ─────────────────────────────────────────────────
         var STATUS_DOT = { running: '#238636', stopped: '#8b949e', starting: '#d29922', failed: '#da3633' };
 
-        function toDisplayClass(s) {
-            if (s === 'running') return 'running';
-            if (s === 'restarting') return 'starting';
-            if (s === 'dead' || s === 'removing') return 'failed';
-            return 'stopped';
-        }
-
         function formatUptime(iso) {
-            if (!iso) return '—';
+            if (!iso) return '\u2014';
             var s = Math.floor((Date.now() - new Date(iso)) / 1000);
-            if (s < 0) return '—';
-            if (s < 60) return s + 's';
-            if (s < 3600) return Math.floor(s / 60) + 'm ' + (s % 60) + 's';
+            if (s < 0)     return '\u2014';
+            if (s < 60)    return s + 's';
+            if (s < 3600)  return Math.floor(s / 60) + 'm ' + (s % 60) + 's';
             if (s < 86400) return Math.floor(s / 3600) + 'h ' + Math.floor((s % 3600) / 60) + 'm';
             return Math.floor(s / 86400) + 'd ' + Math.floor((s % 86400) / 3600) + 'h';
         }
 
-        function formatTs(iso) { return iso ? new Date(iso).toLocaleTimeString() : '—'; }
+        function formatTs(iso) { return iso ? new Date(iso).toLocaleTimeString() : '\u2014'; }
 
-        window.onNodeClick = function (nodeId) {
-            var name = NODE_MAP[nodeId];
-            if (!name) return;
+        function openPanel(name) {
             var c = (DATA.containers || []).find(function (x) { return x.name === name; });
             if (!c) return;
 
             var cls = toDisplayClass(c.status);
-            document.getElementById('panel-name').textContent = c.name;
-            document.getElementById('panel-status-dot').style.background = STATUS_DOT[cls] || STATUS_DOT.stopped;
-            document.getElementById('panel-status').textContent = c.status || 'unknown';
-            document.getElementById('panel-image').textContent = c.image || '—';
-            document.getElementById('panel-host').textContent = c.host || '—';
-            document.getElementById('panel-port').textContent = c.target_port || '—';
-            document.getElementById('panel-health').textContent = c.health_path || '—';
-            document.getElementById('panel-uptime').textContent = formatUptime(c.started_at);
-            document.getElementById('panel-last-req').textContent = formatTs(c.last_request);
-            document.getElementById('panel-idle').textContent = c.idle_timeout || '—';
+            document.getElementById('panel-name').textContent               = c.name;
+            document.getElementById('panel-status-dot').style.background    = STATUS_DOT[cls] || STATUS_DOT.stopped;
+            document.getElementById('panel-status').textContent             = c.status || 'unknown';
+            document.getElementById('panel-image').textContent              = c.image  || '\u2014';
+            document.getElementById('panel-host').textContent               = c.host   || '\u2014';
+            document.getElementById('panel-port').textContent               = c.target_port  || '\u2014';
+            document.getElementById('panel-health').textContent             = c.health_path  || '\u2014';
+            document.getElementById('panel-uptime').textContent             = formatUptime(c.started_at);
+            document.getElementById('panel-last-req').textContent           = formatTs(c.last_request);
+            document.getElementById('panel-idle').textContent               = c.idle_timeout || '\u2014';
 
-            // Icon in panel header — use persistent img + fallback svg (no innerHTML mutation)
-            var slug = (c.icon && c.icon.trim()) ? c.icon.trim() : 'docker';
-            var iconEl = document.getElementById('panel-icon');
+            // Icon in panel header
+            var slug        = (c.icon && c.icon.trim()) ? c.icon.trim() : 'docker';
+            var iconEl      = document.getElementById('panel-icon');
             var iconFallback = document.getElementById('panel-icon-fallback');
-            iconEl.style.display = '';
+            iconEl.style.display      = '';
             iconFallback.style.display = 'none';
             iconEl.onerror = function () {
-                iconEl.style.display = 'none';
+                iconEl.style.display      = 'none';
                 iconFallback.style.display = '';
             };
             iconEl.onload = function () {
-                iconEl.style.display = '';
+                iconEl.style.display      = '';
                 iconFallback.style.display = 'none';
             };
             iconEl.alt = c.name;
             iconEl.src = SI_CDN + encodeURIComponent(slug) + '.svg';
 
-            var deps = c.depends_on || [];
+            // Depends on
+            var deps    = c.depends_on || [];
             var depsRow = document.getElementById('panel-deps-row');
             document.getElementById('panel-deps').textContent = deps.join(', ');
             depsRow.classList.toggle('hidden', deps.length === 0);
 
+            // Schedule
             var schedRow = document.getElementById('panel-schedule-row');
             if (c.schedule_start && c.schedule_stop) {
                 document.getElementById('panel-schedule').textContent =
@@ -477,10 +572,13 @@
             }
 
             document.getElementById('panel').classList.remove('hidden');
-        };
+        }
 
         function closePanel() { document.getElementById('panel').classList.add('hidden'); }
         document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closePanel(); });
+
+        // ─── Init ──────────────────────────────────────────────────────────
+        document.addEventListener('DOMContentLoaded', renderGraph);
     </script>
 
 </body>
