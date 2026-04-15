@@ -1,0 +1,72 @@
+# Docker Awakening Gateway — Test Configuration
+#
+# Used together with docker-compose.test.yml:
+#   docker compose -f docker-compose.yml -f docker-compose.test.yml up
+
+gateway:
+  port: "8080"
+  schedule_timezone: "Europe/Rome"
+  log_lines: 30
+
+containers:
+
+  # ------------------------------------------------------------------
+  # fail-app: always exits immediately with code 1.
+  # Tests: start_timeout expiry → error page.
+  # Use a short start_timeout so the error page shows quickly.
+  # ------------------------------------------------------------------
+  - name: "fail-app"
+    host: "fail-app.localhost:8080"
+    icon: "docker"
+    target_port: "80"
+    network: ""         # leave empty to use first available network
+    start_timeout: "8s"
+    idle_timeout: "0"
+    redirect_path: "/"
+
+  # ------------------------------------------------------------------
+  # sched-offline: shows the "Scheduled Downtime" page immediately.
+  # schedule_stop in the past, schedule_start in the future.
+  # Visit http://sched-offline.localhost:8080 → offline page.
+  # ------------------------------------------------------------------
+  - name: "sched-offline"
+    host: "sched-offline.localhost:8080"
+    target_port: "80"
+    idle_timeout: "0"
+    schedule_stop: "0 8 * * *"     # 08:00 UTC = 10:00 IT
+    schedule_start: "35 8 * * *"   # 08:35 UTC = 10:35 IT
+
+  # ------------------------------------------------------------------
+  # sched-live: real cron test.
+  # Adjust times to ~2 minutes from now, then watch the logs.
+  # ------------------------------------------------------------------
+  - name: "sched-live"
+    host: "sched-live.localhost:8080"
+    target_port: "80"
+    idle_timeout: "0"
+    schedule_start: "16 8 * * *"   # 08:16 UTC = 10:16 IT
+    schedule_stop:  "40 8 * * *"   # 08:40 UTC = 10:40 IT
+
+  # ------------------------------------------------------------------
+  # TOPOLOGY DEMO — frontend → backend → db
+  # Tests: depends_on chain in the topology view.
+  # ------------------------------------------------------------------
+  - name: "demo-frontend"
+    host: "demo-frontend.localhost:8080"
+    icon: "react"
+    target_port: "80"
+    idle_timeout: "10m"
+    depends_on: ["demo-backend"]
+
+  - name: "demo-backend"
+    host: "demo-backend.localhost:8080"
+    icon: "go"
+    target_port: "80"
+    idle_timeout: "10m"
+    depends_on: ["demo-db"]
+
+  - name: "demo-db"
+    host: "demo-db.localhost:8080"
+    icon: "postgresql"
+    target_port: "80"
+    idle_timeout: "10m"

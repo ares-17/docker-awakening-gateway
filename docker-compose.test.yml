@@ -1,0 +1,83 @@
+# Docker Awakening Gateway — Test Compose
+#
+# Adds test containers and switches the gateway to config.test.yaml.
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.test.yml up
+#   docker compose -f docker-compose.yml -f docker-compose.test.yml up --build
+
+services:
+  # Override gateway to use the test config
+  gateway:
+    volumes:
+      - ./config.test.yaml:/etc/gateway/config.test.yaml:ro
+    environment:
+      - CONFIG_PATH=/etc/gateway/config.test.yaml
+
+  # ============================================================
+  # TEST — slow-app
+  # Simulates a container with a long boot time (~15 s).
+  # Tests: normal awakening flow, log box content, redirect.
+  # Config: discovered via Docker labels (no config.test.yaml entry needed).
+  # ============================================================
+  slow-app:
+    image: nginx:alpine
+    container_name: slow-app
+    labels:
+      - "dag.enabled=true"
+      - "dag.host=slow-app.localhost:8080"
+      - "dag.icon=nginx"
+      - "dag.target_port=80"
+      - "dag.start_timeout=120s"
+      - "dag.idle_timeout=5m"
+      - "dag.redirect_path=/"
+    entrypoint: ["/bin/sh", "-c", "echo 'slow-app: boot sequence started'; sleep 15; echo 'slow-app: boot complete, starting nginx'; nginx -g 'daemon off;'"]
+    # NOTE: no restart — gateway manages start/stop
+
+  # ============================================================
+  # TEST — fail-app
+  # Always exits immediately with an error.
+  # Tests: start_timeout expiry → error page.
+  # ============================================================
+  fail-app:
+    image: alpine
+    container_name: fail-app
+    entrypoint: ["/bin/sh", "-c", "echo 'fail-app: simulating crash'; exit 1"]
+
+  # ============================================================
+  # TEST — sched-offline
+  # Shows the "Scheduled Downtime" page immediately.
+  # schedule_stop in the past, schedule_start in the future.
+  # ============================================================
+  sched-offline:
+    image: nginx:alpine
+    container_name: sched-offline
+
+  # ============================================================
+  # TEST — sched-live
+  # Real cron test: start and stop at configured times.
+  # Watch: docker compose -f docker-compose.yml -f docker-compose.test.yml logs -f gateway
+  # ============================================================
+  sched-live:
+    image: nginx:alpine
+    container_name: sched-live
+
+  # ============================================================
+  # TOPOLOGY DEMO — frontend → backend → db
+  # Three lightweight busybox containers showing a depends_on chain.
+  # ============================================================
+  demo-frontend:
+    image: busybox:latest
+    container_name: demo-frontend
+    entrypoint: ["/bin/sh", "-c", "httpd -f -p 80 -h /var/www && echo ok"]
+    # NOTE: no restart — gateway manages start/stop
+
+  demo-backend:
+    image: busybox:latest
+    container_name: demo-backend
+    entrypoint: ["/bin/sh", "-c", "httpd -f -p 80 -h /var/www && echo ok"]
+
+  demo-db:
+    image: busybox:latest
+    container_name: demo-db
+    entrypoint: ["/bin/sh", "-c", "httpd -f -p 80 -h /var/www && echo ok"]
