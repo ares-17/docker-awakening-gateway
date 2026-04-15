@@ -320,8 +320,11 @@
                 // Guard: skip if already processed (reload safety)
                 if (nodeEl.querySelector('.node-si-icon')) return;
 
-                // ── Background rect: prefer .label-container, then any rect ──────────
-                var rect = nodeEl.querySelector('rect.label-container') || nodeEl.querySelector('rect');
+                // ── Background rect: class "basic label-container" in Mermaid v11 ───
+                // Use direct child rect to avoid selecting the empty <rect> inside g.label
+                var rect = nodeEl.querySelector(':scope > rect') ||
+                           nodeEl.querySelector('rect.label-container') ||
+                           nodeEl.querySelector('rect');
                 if (!rect) return;
                 rect.setAttribute('rx', R);
                 rect.setAttribute('ry', R);
@@ -330,12 +333,18 @@
                 rect.setAttribute('width', W);
                 rect.setAttribute('height', H);
 
-                // ── Label: shift right to leave room for icon on the left ───────────
+                // ── Label: shift right, preserve original Y from Mermaid's transform ─
                 var iconSpace = ICON + PAD * 2; // total horizontal space reserved for icon
-                var shift = iconSpace / 2;       // shift label center rightward
+                var shift = iconSpace / 2;       // shift label center rightward by this amount
                 var labelG = nodeEl.querySelector('g.label');
                 if (labelG) {
-                    labelG.setAttribute('transform', 'translate(' + shift + ', 0)');
+                    // Preserve the Y offset Mermaid set (e.g. -12 for vertical centering)
+                    var origTransform = labelG.getAttribute('transform') || '';
+                    var yMatch = origTransform.match(/translate\s*\([^,]+,\s*([^)]+)\)/);
+                    var origY = yMatch ? parseFloat(yMatch[1]) : 0;
+                    labelG.setAttribute('transform', 'translate(' + shift + ', ' + origY + ')');
+
+                    // Update foreignObject to fill the remaining width correctly
                     var fo = labelG.querySelector('foreignObject');
                     if (fo) {
                         var fw = W - iconSpace - PAD;
@@ -356,7 +365,10 @@
                 img.setAttribute('height', ICON);
                 img.setAttribute('class', 'node-si-icon');
                 img.addEventListener('error', function () { this.remove(); });
-                nodeEl.appendChild(img);
+                // Insert before g.label so icon sits behind the text
+                var labelRef = nodeEl.querySelector('g.label');
+                if (labelRef) { nodeEl.insertBefore(img, labelRef); }
+                else { nodeEl.appendChild(img); }
 
                 // ── Status dot: bottom-right corner, same colours as dashboard ───────
                 var cls = toDisplayClass(container.status);
